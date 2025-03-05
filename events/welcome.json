@@ -1,7 +1,7 @@
 {
   "videos": [
     { "url": "https://drive.google.com/uc?id=1_znWKy-7S8Xr2LJ9GA6jyvi7WJ6opFhT" },
-    { "url": "https://example.com/video2.mp4" },
-    { "url": "https://example.com/video3.mp4" }
+    { "url": "https://drive.google.com/uc?id=1_znWKy-7S8Xr2LJ9GA6jyvi7WJ6opFhT" },
+    { "url": "https://drive.google.com/uc?id=1_znWKy-7S8Xr2LJ9GA6jyvi7WJ6opFhT" }
   ]
 }
