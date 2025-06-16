@@ -1,8 +1,11 @@
 { 
   
   "Alldl": "https://mahabub-aldl.vercel.app/api/dl?url=",
+  
   "Drive": "https://glowing-octo-computing-machine-seven.vercel.app/api/upload",
+  
   "YouTube": "https://ytdl-vod1.onrender.com",
+  
   "Ytdlv2": "http://160.191.129.54:5909"
   
 }
