@@ -1,0 +1,85 @@
+<script>
+    function loadImage(imagepath, element) {
+        imagepath = imagepath.replaceAll("&", "^$*");
+
+        $.ajax({
+            type: "GET",
+            url: "/include/loadimage.php",
+            data: "image_url=" + imagepath,
+            beforeSend: function() {
+                $(element).children(".btn-download").hide();
+            },
+            success: function(msg) {
+                $(element).children(".post-image").attr("src", msg);
+                $(element).children(".btn-download").attr("href", msg);
+                $(element).children(".btn-download").show();
+            }
+        });
+    }
+</script>
+<div class="mt-4">
+    <div class="card">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-12 col-md-4 mb-4">
+                    <div class="mb-3 post-preview is-video rounded overflow-hidden" id="post_container_1">
+                        <script>
+                            loadImage("https://scontent.fdad1-4.fna.fbcdn.net/v/t15.5256-10/503097142_1463407801493385_1806843795866603865_n.jpg?_nc_cat=105&ccb=1-7&_nc_sid=be8305&_nc_ohc=lntlBse8iHQQ7kNvwHyNdmv&_nc_oc=AdkzI0PUgLqSGG1gGyDBuTceA-5LWYyqRJMc_SnuaJe46aEfrs1xbXGziT4k0hGi_BM&_nc_zt=23&_nc_ht=scontent.fdad1-4.fna&_nc_gid=TG_33BYGvHDSpzvLaFA-Rg&oh=00_AfT5up4B0ghbbhANxRPLyL0AcQ1cPEzyQRirLi5aKI2wow&oe=68707058", "#post_container_1");
+                        </script>
+                        <img class="post-image rounded" width="100%" src="">
+                        <a class="btn-download btn-primary dl-thumbnail btn w-100" download="toolzin.com-gh4ondfxwr.jpg" id="download" href="">
+                            <svg class="t-icon" height="1em" aria-hidden="true" focusable="false" data-prefix="fa" data-icon="download" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" data-fa-i2svg="">
+                                <path fill="currentColor" d="M216 0h80c13.3 0 24 10.7 24 24v168h87.7c17.8 0 26.7 21.5 14.1 34.1L269.7 378.3c-7.5 7.5-19.8 7.5-27.3 0L90.1 226.1c-12.6-12.6-3.7-34.1 14.1-34.1H192V24c0-13.3 10.7-24 24-24zm296 376v112c0 13.3-10.7 24-24 24H24c-13.3 0-24-10.7-24-24V376c0-13.3 10.7-24 24-24h146.7l49 49c20.1 20.1 52.5 20.1 72.6 0l49-49H488c13.3 0 24 10.7 24 24zm-124 88c0-11-9-20-20-20s-20 9-20 20 9 20 20 20 20-9 20-20zm64 0c0-11-9-20-20-20s-20 9-20 20 9 20 20 20 20-9 20-20z"></path>
+                            </svg>
+                            Save Thumbnail
+                        </a>
+                        <a target="_blank" class="btn-primary btn w-100" href="https://video.fdad1-2.fna.fbcdn.net/o1/v/t2/f2/m69/AQOgXpRVyV5sTYPKgJlmSKrsI8FVa_YDoAf2nmxPAdXBWNIENi8ISyJZWot-mLjU15ELeQEEI30z1sxFzwEANrow.mp4?strext=1&_nc_cat=102&_nc_oc=AdmlQTHPdV50Z3RqdemTc9NV8Hpl9Rx-yuJzT4eMjtiCrZ3ona-Ukn0HyW6RfOwSf0g&_nc_sid=5e9851&_nc_ht=video.fdad1-2.fna.fbcdn.net&_nc_ohc=9ojlAsYUS0IQ7kNvwEscNdN&efg=eyJ2ZW5jb2RlX3RhZyI6Inhwdl9wcm9ncmVzc2l2ZS5GQUNFQk9PSy4uQzMuMTI4MC5kYXNoX2gyNjQtYmFzaWMtZ2VuMl83MjBwIiwieHB2X2Fzc2V0X2lkIjo2MzA5NDk3NDk5NTU5NDcsInZpX3VzZWNhc2VfaWQiOjEwMTIyLCJkdXJhdGlvbl9zIjoxMDUsInVybGdlbl9zb3VyY2UiOiJ3d3cifQ%3D%3D&ccb=17-1&vs=6952fbdf4150e1a0&_nc_vs=HBksFQIYOnBhc3N0aHJvdWdoX2V2ZXJzdG9yZS9HTk12OHgxajdHZ1JLbjRDQUFkbkIzVWlTNUZLYm1kakFBQUYVAALIARIAFQIYOnBhc3N0aHJvdWdoX2V2ZXJzdG9yZS9HRk0zN2gwNXZIUmlTcElIQUdvVUcxU1JqSW93YnJGcUFBQUYVAgLIARIAKAAYABsCiAd1c2Vfb2lsATEScHJvZ3Jlc3NpdmVfcmVjaXBlATEVAAAm1vW8-432ngIVAigCQzMsF0BaZDlYEGJOGBlkYXNoX2gyNjQtYmFzaWMtZ2VuMl83MjBwEQB1AmWUngEA&_nc_zt=28&oh=00_AfQueebrSOHfyn79gSoKxuPh1gUW7JAPr8vn2vLe6dwWCg&oe=68708D0C&dl=1">
+                            <svg class="t-icon" height="1em" aria-hidden="true" focusable="false" data-prefix="fa" data-icon="play" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" data-fa-i2svg="">
+                                <path fill="currentColor" d="M424.4 214.7L72.4 6.6C43.8-10.3 0 6.1 0 47.9V464c0 37.5 40.7 60.1 72.4 41.3l352-208c31.4-18.5 31.5-64.1 0-82.6z"></path>
+                            </svg>
+                            Download Video (HD)
+                        </a>
+                        <a target="_blank" style="bottom: 8.5em !important" class="dl-sound btn-primary btn w-100" href="/download?file=aHR0cHM6Ly92aWRlby5mZGFkMS0yLmZuYS5mYmNkbi5uZXQvbzEvdi90Mi9mMi9tNjkvQVFPZ1hwUlZ5VjVzVFlQS2dKbG1TS3JzSThGVmFfWURvQWYybm14UEFkWEJXTklFTmk4SVN5SlpXb3QtbUxqVTE1RUxlUUVFSTMwejFzeEZ6d0VBTnJvdy5tcDQ/c3RyZXh0KiReMV4kKl9uY19jYXQqJF4xMDJeJCpfbmNfb2MqJF5BZG1sUVRIUGRWNTBaM1JxZGVtVGM5TlY4SHBsOVJ4LXl1SnpUNGVNanRpQ3JaM29uYS1Va24wSHlXNlJmT3dTZjBnXiQqX25jX3NpZCokXjVlOTg1MV4kKl9uY19odCokXnZpZGVvLmZkYWQxLTIuZm5hLmZiY2RuLm5ldF4kKl9uY19vaGMqJF45b2psQXNZVVMwSVE3a052d0VzY05kTl4kKmVmZyokXmV5SjJaVzVqYjJSbFgzUmhaeUk2SW5od2RsOXdjbTluY21WemMybDJaUzVHUVVORlFrOVBTeTR1UXpNdU1USTRNQzVrWVhOb1gyZ3lOalF0WW1GemFXTXRaMlZ1TWw4M01qQndJaXdpZUhCMlgyRnpjMlYwWDJsa0lqbzJNekE1TkRrM05EazVOVFU1TkRjc0luWnBYM1Z6WldOaGMyVmZhV1FpT2pFd01USXlMQ0prZFhKaGRHbHZibDl6SWpveE1EVXNJblZ5YkdkbGJsOXpiM1Z5WTJVaU9pSjNkM2NpZlElM0QlM0ReJCpjY2IqJF4xNy0xXiQqdnMqJF42OTUyZmJkZjQxNTBlMWEwXiQqX25jX3ZzKiReSEJrc0ZRSVlPbkJoYzNOMGFISnZkV2RvWDJWMlpYSnpkRzl5WlM5SFRrMTJPSGd4YWpkSFoxSkxialJEUVVGa2JrSXpWV2xUTlVaTFltMWtha0ZCUVVZVkFBTElBUklBRlFJWU9uQmhjM04wYUhKdmRXZG9YMlYyWlhKemRHOXlaUzlIUmswek4yZ3dOWFpJVW1sVGNFbElRVWR2VlVjeFUxSnFTVzkzWW5KR2NVRkJRVVlWQWdMSUFSSUFLQUFZQUJzQ2lBZDFjMlZmYjJsc0FURVNjSEp2WjNKbGMzTnBkbVZmY21WamFYQmxBVEVWQUFBbTF2VzgtNDMybmdJVkFpZ0NRek1zRjBCYVpEbFlFR0pPR0Jsa1lYTm9YMmd5TmpRdFltRnphV010WjJWdU1sODNNakJ3RVFCMUFtV1VuZ0VBXiQqX25jX3p0KiReMjheJCpvaCokXjAwX0FmUXVlZWJyU09IZnluNzlnU29LeHVQaDFnVVc3SkFQcjh2bjJ2TGU2ZHdXQ2deJCpvZSokXjY4NzA4RDBD&music=1&name=gh4ondfxwr.mp3">
+                            <svg class="t-icon" height="1em" aria-hidden="true" focusable="false" data-prefix="fa" data-icon="copy" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" data-fa-i2svg="">
+                                <path fill="currentColor" d="M470.38 1.51L150.41 96A32 32 0 0 0 128 126.51v261.41A139 139 0 0 0 96 384c-53 0-96 28.66-96 64s43 64 96 64 96-28.66 96-64V214.32l256-75v184.61a138.4 138.4 0 0 0-32-3.93c-53 0-96 28.66-96 64s43 64 96 64 96-28.65 96-64V32a32 32 0 0 0-41.62-30.49z"/>
+                            </svg>
+                            Download Audio
+                        </a>
+                    </div>
+                    <audio controls="" class="w-100">
+                        <source src="/download?file=aHR0cHM6Ly92aWRlby5mZGFkMS0yLmZuYS5mYmNkbi5uZXQvbzEvdi90Mi9mMi9tNjkvQVFPZ1hwUlZ5VjVzVFlQS2dKbG1TS3JzSThGVmFfWURvQWYybm14UEFkWEJXTklFTmk4SVN5SlpXb3QtbUxqVTE1RUxlUUVFSTMwejFzeEZ6d0VBTnJvdy5tcDQ/c3RyZXh0KiReMV4kKl9uY19jYXQqJF4xMDJeJCpfbmNfb2MqJF5BZG1sUVRIUGRWNTBaM1JxZGVtVGM5TlY4SHBsOVJ4LXl1SnpUNGVNanRpQ3JaM29uYS1Va24wSHlXNlJmT3dTZjBnXiQqX25jX3NpZCokXjVlOTg1MV4kKl9uY19odCokXnZpZGVvLmZkYWQxLTIuZm5hLmZiY2RuLm5ldF4kKl9uY19vaGMqJF45b2psQXNZVVMwSVE3a052d0VzY05kTl4kKmVmZyokXmV5SjJaVzVqYjJSbFgzUmhaeUk2SW5od2RsOXdjbTluY21WemMybDJaUzVHUVVORlFrOVBTeTR1UXpNdU1USTRNQzVrWVhOb1gyZ3lOalF0WW1GemFXTXRaMlZ1TWw4M01qQndJaXdpZUhCMlgyRnpjMlYwWDJsa0lqbzJNekE1TkRrM05EazVOVFU1TkRjc0luWnBYM1Z6WldOaGMyVmZhV1FpT2pFd01USXlMQ0prZFhKaGRHbHZibDl6SWpveE1EVXNJblZ5YkdkbGJsOXpiM1Z5WTJVaU9pSjNkM2NpZlElM0QlM0ReJCpjY2IqJF4xNy0xXiQqdnMqJF42OTUyZmJkZjQxNTBlMWEwXiQqX25jX3ZzKiReSEJrc0ZRSVlPbkJoYzNOMGFISnZkV2RvWDJWMlpYSnpkRzl5WlM5SFRrMTJPSGd4YWpkSFoxSkxialJEUVVGa2JrSXpWV2xUTlVaTFltMWtha0ZCUVVZVkFBTElBUklBRlFJWU9uQmhjM04wYUhKdmRXZG9YMlYyWlhKemRHOXlaUzlIUmswek4yZ3dOWFpJVW1sVGNFbElRVWR2VlVjeFUxSnFTVzkzWW5KR2NVRkJRVVlWQWdMSUFSSUFLQUFZQUJzQ2lBZDFjMlZmYjJsc0FURVNjSEp2WjNKbGMzTnBkbVZmY21WamFYQmxBVEVWQUFBbTF2VzgtNDMybmdJVkFpZ0NRek1zRjBCYVpEbFlFR0pPR0Jsa1lYTm9YMmd5TmpRdFltRnphV010WjJWdU1sODNNakJ3RVFCMUFtV1VuZ0VBXiQqX25jX3p0KiReMjheJCpvaCokXjAwX0FmUXVlZWJyU09IZnluNzlnU29LeHVQaDFnVVc3SkFQcjh2bjJ2TGU2ZHdXQ2deJCpvZSokXjY4NzA4RDBD&music=1&name=gh4ondfxwr.mp3" type="audio/mpeg">Your browser does not support the audio element.
+                    </audio>
+                </div>
+                <div class="col-12 col-md-4 mb-4">
+                    <div class="mb-3 post-preview is-video rounded overflow-hidden" id="post_container_2">
+                        <script>
+                            loadImage("https://scontent.fdad1-4.fna.fbcdn.net/v/t15.5256-10/503097142_1463407801493385_1806843795866603865_n.jpg?_nc_cat=105&ccb=1-7&_nc_sid=be8305&_nc_ohc=lntlBse8iHQQ7kNvwHyNdmv&_nc_oc=AdkzI0PUgLqSGG1gGyDBuTceA-5LWYyqRJMc_SnuaJe46aEfrs1xbXGziT4k0hGi_BM&_nc_zt=23&_nc_ht=scontent.fdad1-4.fna&_nc_gid=TG_33BYGvHDSpzvLaFA-Rg&oh=00_AfT5up4B0ghbbhANxRPLyL0AcQ1cPEzyQRirLi5aKI2wow&oe=68707058", "#post_container_2");
+                        </script>
+                        <img class="post-image rounded" width="100%" src="">
+                        <a class="btn-download btn-primary dl-thumbnail btn w-100" download="toolzin.com-dxakmjqvjj.jpg" id="download" href="">
+                            <svg class="t-icon" height="1em" aria-hidden="true" focusable="false" data-prefix="fa" data-icon="download" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" data-fa-i2svg="">
+                                <path fill="currentColor" d="M216 0h80c13.3 0 24 10.7 24 24v168h87.7c17.8 0 26.7 21.5 14.1 34.1L269.7 378.3c-7.5 7.5-19.8 7.5-27.3 0L90.1 226.1c-12.6-12.6-3.7-34.1 14.1-34.1H192V24c0-13.3 10.7-24 24-24zm296 376v112c0 13.3-10.7 24-24 24H24c-13.3 0-24-10.7-24-24V376c0-13.3 10.7-24 24-24h146.7l49 49c20.1 20.1 52.5 20.1 72.6 0l49-49H488c13.3 0 24 10.7 24 24zm-124 88c0-11-9-20-20-20s-20 9-20 20 9 20 20 20 20-9 20-20zm64 0c0-11-9-20-20-20s-20 9-20 20 9 20 20 20 20-9 20-20z"></path>
+                            </svg>
+                            Save Thumbnail
+                        </a>
+                        <a target="_blank" class="btn-primary btn w-100" href="https://video.fdad2-1.fna.fbcdn.net/o1/v/t2/f2/m69/AQNwJ5uTOFXb-Kx4oZFYvJ6HohBlgMl4oXimEHJaZ4l25Gl-d4-EbaaeewvUyLxLwS1dZ-uddVV0IvvBBCBnhPS_.mp4?strext=1&_nc_cat=101&_nc_oc=AdlWkYQdfCA8rP0XX8QfT8ccHQ6-fFAHDvswazL--sB9iARXqHFsUxM2XSwm0flw07Y&_nc_sid=8bf8fe&_nc_ht=video.fdad2-1.fna.fbcdn.net&_nc_ohc=w-u_Ar0uvc0Q7kNvwGcLSXg&efg=eyJ2ZW5jb2RlX3RhZyI6Inhwdl9wcm9ncmVzc2l2ZS5GQUNFQk9PSy4uQzMuNjQwLnN2ZV9zZCIsInhwdl9hc3NldF9pZCI6NjMwOTQ5NzQ5OTU1OTQ3LCJ2aV91c2VjYXNlX2lkIjoxMDEyMiwiZHVyYXRpb25fcyI6MTA1LCJ1cmxnZW5fc291cmNlIjoid3d3In0%3D&ccb=17-1&_nc_zt=28&oh=00_AfTQaI-EMIyKSgZehCdQgtMrvyB-Ki1V0JZFZkk2-RVWww&oe=68709211&dl=1">
+                            <svg class="t-icon" height="1em" aria-hidden="true" focusable="false" data-prefix="fa" data-icon="play" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" data-fa-i2svg="">
+                                <path fill="currentColor" d="M424.4 214.7L72.4 6.6C43.8-10.3 0 6.1 0 47.9V464c0 37.5 40.7 60.1 72.4 41.3l352-208c31.4-18.5 31.5-64.1 0-82.6z"></path>
+                            </svg>
+                            Download Video (SD)
+                        </a>
+                        <a target="_blank" style="bottom: 8.5em !important" class="dl-sound btn-primary btn w-100" href="/download?file=aHR0cHM6Ly92aWRlby5mZGFkMi0xLmZuYS5mYmNkbi5uZXQvbzEvdi90Mi9mMi9tNjkvQVFOd0o1dVRPRlhiLUt4NG9aRll2SjZIb2hCbGdNbDRvWGltRUhKYVo0bDI1R2wtZDQtRWJhYWVld3ZVeUx4THdTMWRaLXVkZFZWMEl2dkJCQ0JuaFBTXy5tcDQ/c3RyZXh0KiReMV4kKl9uY19jYXQqJF4xMDFeJCpfbmNfb2MqJF5BZGxXa1lRZGZDQThyUDBYWDhRZlQ4Y2NIUTYtZkZBSER2c3dhekwtLXNCOWlBUlhxSEZzVXhNMlhTd20wZmx3MDdZXiQqX25jX3NpZCokXjhiZjhmZV4kKl9uY19odCokXnZpZGVvLmZkYWQyLTEuZm5hLmZiY2RuLm5ldF4kKl9uY19vaGMqJF53LXVfQXIwdXZjMFE3a052d0djTFNYZ14kKmVmZyokXmV5SjJaVzVqYjJSbFgzUmhaeUk2SW5od2RsOXdjbTluY21WemMybDJaUzVHUVVORlFrOVBTeTR1UXpNdU5qUXdMbk4yWlY5elpDSXNJbmh3ZGw5aGMzTmxkRjlwWkNJNk5qTXdPVFE1TnpRNU9UVTFPVFEzTENKMmFWOTFjMlZqWVhObFgybGtJam94TURFeU1pd2laSFZ5WVhScGIyNWZjeUk2TVRBMUxDSjFjbXhuWlc1ZmMyOTFjbU5sSWpvaWQzZDNJbjAlM0ReJCpjY2IqJF4xNy0xXiQqX25jX3p0KiReMjheJCpvaCokXjAwX0FmVFFhSS1FTUl5S1NnWmVoQ2RRZ3RNcnZ5Qi1LaTFWMEpaRlprazItUlZXd3deJCpvZSokXjY4NzA5MjEx&music=1&name=dxakmjqvjj.mp3">
+                            <svg class="t-icon" height="1em" aria-hidden="true" focusable="false" data-prefix="fa" data-icon="copy" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" data-fa-i2svg="">
+                                <path fill="currentColor" d="M470.38 1.51L150.41 96A32 32 0 0 0 128 126.51v261.41A139 139 0 0 0 96 384c-53 0-96 28.66-96 64s43 64 96 64 96-28.66 96-64V214.32l256-75v184.61a138.4 138.4 0 0 0-32-3.93c-53 0-96 28.66-96 64s43 64 96 64 96-28.65 96-64V32a32 32 0 0 0-41.62-30.49z"/>
+                            </svg>
+                            Download Audio
+                        </a>
+                    </div>
+                    <audio controls="" class="w-100">
+                        <source src="/download?file=aHR0cHM6Ly92aWRlby5mZGFkMi0xLmZuYS5mYmNkbi5uZXQvbzEvdi90Mi9mMi9tNjkvQVFOd0o1dVRPRlhiLUt4NG9aRll2SjZIb2hCbGdNbDRvWGltRUhKYVo0bDI1R2wtZDQtRWJhYWVld3ZVeUx4THdTMWRaLXVkZFZWMEl2dkJCQ0JuaFBTXy5tcDQ/c3RyZXh0KiReMV4kKl9uY19jYXQqJF4xMDFeJCpfbmNfb2MqJF5BZGxXa1lRZGZDQThyUDBYWDhRZlQ4Y2NIUTYtZkZBSER2c3dhekwtLXNCOWlBUlhxSEZzVXhNMlhTd20wZmx3MDdZXiQqX25jX3NpZCokXjhiZjhmZV4kKl9uY19odCokXnZpZGVvLmZkYWQyLTEuZm5hLmZiY2RuLm5ldF4kKl9uY19vaGMqJF53LXVfQXIwdXZjMFE3a052d0djTFNYZ14kKmVmZyokXmV5SjJaVzVqYjJSbFgzUmhaeUk2SW5od2RsOXdjbTluY21WemMybDJaUzVHUVVORlFrOVBTeTR1UXpNdU5qUXdMbk4yWlY5elpDSXNJbmh3ZGw5aGMzTmxkRjlwWkNJNk5qTXdPVFE1TnpRNU9UVTFPVFEzTENKMmFWOTFjMlZqWVhObFgybGtJam94TURFeU1pd2laSFZ5WVhScGIyNWZjeUk2TVRBMUxDSjFjbXhuWlc1ZmMyOTFjbU5sSWpvaWQzZDNJbjAlM0ReJCpjY2IqJF4xNy0xXiQqX25jX3p0KiReMjheJCpvaCokXjAwX0FmVFFhSS1FTUl5S1NnWmVoQ2RRZ3RNcnZ5Qi1LaTFWMEpaRlprazItUlZXd3deJCpvZSokXjY4NzA5MjEx&music=1&name=dxakmjqvjj.mp3" type="audio/mpeg">Your browser does not support the audio element.
+                    </audio>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
