@@ -1,10 +1,14 @@
 { 
   
-  "Alldl": "https://mahabub-aldl.vercel.app/api/dl?url=",
- 
-  
-  "YouTube": "https://mahabub-ytdl.vercel.app/api",
-  
-  "Ytdlv2": "wintr.wisp.uno:13113/cdn?url=" 
-  
+  "Alldl":     "https://mahabub-aldl.vercel.app/api/dl?url=",
+  "drive":     "https://glowing-octo-computing-machine-seven.vercel.app/api/upload?url=",
+  "imgur":     "https://imgur-upload-psi.vercel.app/mahabub?url=",
+  "YouTube":   "https://mahabub-ytdl.vercel.app/api",
+  "ytmp3":     "https://mahabub-ytmp3.vercel.app/api/cdn?url=",
+  "imagine":   "https://mahabub-imagine-api.vercel.app/api/gen?prompt=",
+  "upscale":   "http://meta.wisp.uno:12986/upscale?url=",
+  "prompt":    "https://mahabub-prompt-api.vercel.app/api/prompt?url=",
+  "porndl":    "https://mc-nine-self.vercel.app/api/x?url=",
+  "tikdl":     "https://mahabub-tkdl.vercel.app/api/tikdl?url=",
+  "pinterest": "https://mahabub-pinterest-api.onrender.com/pinterest?search="
 }
