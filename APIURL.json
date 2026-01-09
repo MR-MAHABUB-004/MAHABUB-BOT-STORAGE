@@ -10,5 +10,6 @@
   "prompt":    "https://mahabub-prompt-api.vercel.app/api/prompt?url=",
   "porndl":    "https://mc-nine-self.vercel.app/api/x?url=",
   "tikdl":     "https://mahabub-tkdl.vercel.app/api/tikdl?url=",
-  "pinterest": "https://mahabub-pinterest-api.onrender.com/pinterest?search="
+  "pinterest": "https://mahabub-pinterest-api.onrender.com/pinterest?search=",
+  "stream":    "https://alldl--bromahabub0.replit.app"
 }
