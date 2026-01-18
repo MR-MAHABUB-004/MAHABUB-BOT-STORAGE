@@ -1,31 +1,41 @@
 const { getStreamsFromAttachment, log } = global.utils;
 
 /**
- * Added 'sticker' and 'gif' to mediaTypes.
- * Note: 'animated_image' usually covers GIFs on Messenger,
- * but 'sticker' is a separate category.
+ * Enhanced mediaTypes to support GIFs and Stickers
  */
 const mediaTypes = ["photo", "png", "animated_image", "video", "audio", "sticker", "gif"];
 
 module.exports = {
 	config: {
 		name: "callad",
-		version: "1.9",
-		author: "NTKhang",
+		version: "2.0",
+		author: "NTKhang & Gemini",
 		countDown: 5,
 		role: 0,
 		description: {
-			vi: "Gửi tin nhắn tới Admin hoặc Admin gửi thông báo tới tất cả nhóm (Hỗ trợ GIF/Sticker)",
-			en: "Send message to Admin or Admin sends notification to all groups (Supports GIF/Sticker)"
+			en: "Send report/feedback to admin OR Admin broadcasts to all groups (Supports GIF/Sticker)",
+			vi: "Gửi báo cáo tới admin hoặc Admin gửi thông báo tới tất cả nhóm (Hỗ trợ GIF/Sticker)"
 		},
 		category: "contacts admin",
 		guide: {
-			vi: "   {pn} <tin nhắn>",
-			en: "   {pn} <message>"
+			en: "   {pn} <message>",
+			vi: "   {pn} <tin nhắn>"
 		}
 	},
 
 	langs: {
+		en: {
+			missingMessage: "Please enter a message or attach a photo/gif/sticker!",
+			sendByGroup: "\n- Sent from group: %1\n- Thread ID: %2",
+			sendByUser: "\n- Sent from user",
+			content: "\n\nContent:\n─────────────────\n%1\n─────────────────\nReply to this message to chat",
+			success: "Sent successfully to %1 target(s)!",
+			adminNotification: "==📢 NOTIFICATION FROM ADMIN ==\n\nSender: %1\nContent: %2\n\n─────────────────\nReply to this message to send feedback to admin",
+			noAdmin: "Bot has no admin at the moment",
+			replySuccess: "Sent your reply successfully!",
+			replyFrom: "📍 Reply from: %1\n─────────────────\n%2",
+			error: "An error occurred while sending your message."
+		},
 		vi: {
 			missingMessage: "Vui lòng nhập tin nhắn hoặc đính kèm ảnh/gif/sticker!",
 			sendByGroup: "\n- Được gửi từ nhóm: %1\n- Thread ID: %2",
@@ -33,16 +43,10 @@ module.exports = {
 			content: "\n\nNội dung:\n─────────────────\n%1\n─────────────────\nPhản hồi tin nhắn này để trao đổi",
 			success: "Đã gửi thành công tới %1 mục tiêu!",
 			adminNotification: "==📢 THÔNG BÁO TỪ ADMIN ==\n\nNgười gửi: %1\nNội dung: %2\n\n─────────────────\nPhản hồi tin nhắn này để gửi lại báo cáo cho admin",
-			noAdmin: "Hiện tại bot chưa có admin nào"
-		},
-		en: {
-			missingMessage: "Please enter a message or attach a photo/gif/sticker!",
-			sendByGroup: "\n- Sent from group: %1\n- Thread ID: %2",
-			sendByUser: "\n- Sent from user",
-			content: "\n\nContent:\n─────────────────\n%1\n─────────────────\nReply to this message to chat",
-			success: "Sent your message to %1 targets successfully!",
-			adminNotification: "==📢 NOTIFICATION FROM ADMIN ==\n\nSender: %1\nContent: %2\n\n─────────────────\nReply to this message to send feedback to admin",
-			noAdmin: "Bot has no admin at the moment"
+			noAdmin: "Hiện tại bot chưa có admin nào",
+			replySuccess: "Đã gửi phản hồi thành công!",
+			replyFrom: "📍 Phản hồi từ: %1\n─────────────────\n%2",
+			error: "Đã xảy ra lỗi khi gửi tin nhắn."
 		}
 	},
 
@@ -50,7 +54,7 @@ module.exports = {
 		const { config } = global.GoatBot;
 		const { senderID, threadID, isGroup } = event;
 
-		// Allow sending if there is text OR an attachment (like a sticker/gif)
+		// Check if there is text or an attachment
 		if (!args[0] && event.attachments.length === 0 && !event.messageReply) 
 			return message.reply(getLang("missingMessage"));
 			
@@ -59,7 +63,7 @@ module.exports = {
 		const senderName = await usersData.getName(senderID);
 		const isAdmin = config.adminBot.includes(senderID);
 
-		// Combine attachments from the current message and the replied message
+		// Combine attachments from current message or replied message
 		const attachments = [...event.attachments, ...(event.messageReply?.attachments || [])]
 			.filter(item => mediaTypes.includes(item.type));
 
@@ -70,7 +74,7 @@ module.exports = {
 			let count = 0;
 
 			const formAdminMsg = {
-				body: getLang("adminNotification", senderName, args.join(" ")),
+				body: getLang("adminNotification", senderName, args.join(" ") || "(Attachment)"),
 				attachment: await getStreamsFromAttachment(attachments)
 			};
 
@@ -91,13 +95,13 @@ module.exports = {
 		}
 
 		// --- CASE 2: NORMAL USER TO ADMINS ---
-		const msg = "==📨️ CALL ADMIN 📨️=="
+		const msgHead = "==📨️ CALL ADMIN 📨️=="
 			+ `\n- User Name: ${senderName}`
 			+ `\n- User ID: ${senderID}`
 			+ (isGroup ? getLang("sendByGroup", (await threadsData.get(threadID)).threadName, threadID) : getLang("sendByUser"));
 
 		const formUserMsg = {
-			body: msg + getLang("content", args.join(" ")),
+			body: msgHead + getLang("content", args.join(" ") || "(Attachment)"),
 			mentions: [{ id: senderID, tag: senderName }],
 			attachment: await getStreamsFromAttachment(attachments)
 		};
@@ -126,13 +130,13 @@ module.exports = {
 		const attachments = event.attachments.filter(item => mediaTypes.includes(item.type));
 
 		const formMessage = {
-			body: `📍 Phản hồi từ: ${senderName}\n─────────────────\n${args.join(" ")}`,
+			body: getLang("replyFrom", senderName, args.join(" ") || "(Attachment)"),
 			attachment: await getStreamsFromAttachment(attachments)
 		};
 
 		api.sendMessage(formMessage, threadID, (err, info) => {
-			if (err) return message.reply("Lỗi khi gửi phản hồi!");
-			message.reply("Đã gửi phản hồi thành công!");
+			if (err) return message.reply(getLang("error"));
+			message.reply(getLang("replySuccess"));
 			global.GoatBot.onReply.set(info.messageID, {
 				commandName,
 				messageID: info.messageID,
