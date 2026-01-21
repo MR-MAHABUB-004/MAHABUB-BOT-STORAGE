@@ -12,5 +12,6 @@
   "tikdl":     "https://mahabub-tkdl.vercel.app/api/tikdl?url=",
   "pinterest": "https://mahabub-pinterest-api.onrender.com/pinterest?search=",
   "stream":    "https://alldl--bromahabub0.replit.app/api/dl",
-  "sim":       "https://mahabub-nirob-simisimi.onrender.com"
+  "sim":       "https://mahabub-nirob-simisimi.onrender.com",
+  "album":     "http://72.62.241.211:6788"
 }
