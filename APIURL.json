@@ -1,5 +1,6 @@
 { 
   
+  "api":       "https://mahabub-apis.fun",
   "Alldl":     "https://mahabub-aldl.vercel.app/api/dl?url=",
   "drive":     "https://glowing-octo-computing-machine-seven.vercel.app/api/upload?url=",
   "imgur":     "https://imgur-upload-psi.vercel.app/mahabub?url=",
