@@ -131,7 +131,7 @@ module.exports = {
 
     try {
       const BASE = await getBaseApi();
-      const apiUrl = `${BASE}/mahabub/ytmp3v2?url=${videoId}`;
+      const apiUrl = `${BASE}/mahabub/ytmp3v3?url=${videoId}`;
       const { data } = await axios.get(apiUrl);
 
       if (!data?.status || !data.data?.link) {
