@@ -6,40 +6,79 @@ const { pipeline } = require("stream/promises");
 const cacheDir = path.join(__dirname, "cache");
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
+const MAX_SIZE = 25 * 1024 * 1024; // Messenger attachment limit
+
 const API_JSON =
   "https://raw.githubusercontent.com/MR-MAHABUB-004/MAHABUB-BOT-STORAGE/refs/heads/main/APIURL.json";
 
-let BASE_API = null;
-let YTDL_API = null;
-
-async function getBaseApi() {
-  if (BASE_API) return BASE_API;
-  const res = await axios.get(API_JSON, { timeout: 15000 });
-  if (!res.data?.api) throw new Error("API URL not found");
-  BASE_API = String(res.data.api).replace(/\/+$/, "");
-  return BASE_API;
-}
-
-async function getYtdlApi() {
-  if (YTDL_API) return YTDL_API;
-  const res = await axios.get(API_JSON, { timeout: 15000 });
-  if (!res.data?.ytdlapi) throw new Error("YTDL API URL not found");
-  YTDL_API = String(res.data.ytdlapi).replace(/\/+$/, "");
-  return YTDL_API;
-}
-
-const HEADERS = {
+const DL_HEADERS = {
   "User-Agent":
-    "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
   Accept: "*/*"
 };
 
+let API_CACHE = null;
+
+async function getApiConfig() {
+  if (API_CACHE) return API_CACHE;
+  const res = await axios.get(API_JSON, { timeout: 15000 });
+  if (!res.data || typeof res.data !== "object") throw new Error("API config invalid");
+  API_CACHE = res.data;
+  return API_CACHE;
+}
+
+async function getBaseApi() {
+  const cfg = await getApiConfig();
+  if (!cfg.api) throw new Error("API URL not found");
+  return String(cfg.api).replace(/\/+$/, "");
+}
+
+async function getYtdlApi() {
+  // ytdl uses the same base API as search
+  return getBaseApi();
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Safe error-body printer (stream bodies are skipped)
+const errBody = (err) => {
+  const d = err?.response?.data;
+  if (!d || typeof d.pipe === "function") return "";
+  try {
+    return typeof d === "string" ? d.slice(0, 300) : JSON.stringify(d).slice(0, 300);
+  } catch {
+    return "";
+  }
+};
+
+// Call ytdl API (takes ~20s, Render may cold-start) with retry
+async function fetchYtdl(BASE, youtubeUrl) {
+  const apiUrl = `${BASE}/mahabub/ytdl?url=${encodeURIComponent(youtubeUrl)}`;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await axios.get(apiUrl, { timeout: 120000 });
+      const body = res.data;
+      // Format: { developer, status, data: { title, thumb, video, video_hd, audio, quality, channel } }
+      const info = [body?.data?.data, body?.data, body].find(
+        (x) => x && typeof x === "object" && (x.audio || x.mp3 || x.video_hd || x.video)
+      );
+      if (info && body?.status !== false && body?.data?.status !== false) return info;
+      lastErr = new Error("API returned no download link");
+      console.error("[SING] Invalid API response:", JSON.stringify(body)?.slice(0, 500));
+    } catch (e) {
+      lastErr = e;
+      console.error(`[SING] ytdl attempt ${attempt} failed:`, e?.response?.status || e?.code || "", e?.message);
+    }
+    if (attempt < 3) await sleep(attempt * 3000);
+  }
+  throw lastErr;
+}
 
 module.exports = {
   config: {
     name: "sing",
-    version: "5.0",
+    version: "5.2",
     author: "@𝐌𝐑᭄﹅ 𝐌𝐀𝐇𝐀𝐁𝐔𝐁﹅ メꪜ",
     countDown: 5,
     role: 0,
@@ -76,7 +115,6 @@ module.exports = {
       const data = response.data;
       console.log("[SING] Search response:", JSON.stringify(data)?.slice(0, 1500));
 
-      // Tolerant parsing: find the results array wherever it is
       const pick = (d) =>
         [
           d?.videos,
@@ -100,7 +138,6 @@ module.exports = {
         );
       }
 
-      // Normalize each item
       const results = rawList.slice(0, 10).map((it) => {
         const url = it.url || it.link || "";
         const idFromUrl = (url.match(/[?&]v=([\w-]{11})/) ||
@@ -127,7 +164,6 @@ module.exports = {
         if (meta) body += `     ${meta}\n`;
       });
 
-      // Fetch thumbnails in parallel, keep result order, skip failures
       const thumbs = await Promise.all(
         results.map(async (item) => {
           const thumbnail =
@@ -179,7 +215,7 @@ module.exports = {
 
       api.setMessageReaction("🎶", event.messageID, () => {}, true);
     } catch (err) {
-      console.error("SONG SEARCH ERROR:", err?.response?.data || err);
+      console.error("SONG SEARCH ERROR:", err?.response?.status, err?.message);
       api.setMessageReaction("❌", event.messageID, () => {}, true);
       api.sendMessage("❌ **Search failed!**\nTry again later.", event.threadID);
     }
@@ -189,7 +225,7 @@ module.exports = {
   // REPLY HANDLER
   // ============================================================
   onReply: async ({ api, event, Reply }) => {
-    if (event.senderID !== Reply.author) return;
+    if (String(event.senderID) !== String(Reply.author)) return;
 
     const choice = parseInt(String(event.body || "").trim(), 10);
 
@@ -226,7 +262,7 @@ module.exports = {
       if (filePath && fs.existsSync(filePath)) fs.unlink(filePath, () => {});
     };
 
-    // Reject JSON/HTML error bodies saved as media, without trusting content-type
+    // Reject JSON/HTML error bodies saved as media
     const looksLikeError = (file) => {
       const size = fs.statSync(file).size;
       if (size > 50 * 1024) return false;
@@ -239,38 +275,41 @@ module.exports = {
         responseType: "stream",
         timeout: 180000,
         maxRedirects: 5,
-        headers: HEADERS,
+        headers: DL_HEADERS,
         validateStatus: (s) => s >= 200 && s < 300
       });
+
+      const ctype = String(r.headers["content-type"] || "").toLowerCase();
+      if (/text\/html|application\/json/.test(ctype)) {
+        r.data.destroy();
+        throw new Error(`Bad content-type: ${ctype}`);
+      }
+
+      const len = Number(r.headers["content-length"] || 0);
+      if (len > MAX_SIZE) {
+        r.data.destroy();
+        const e = new Error("File too large");
+        e.code = "TOO_BIG";
+        throw e;
+      }
 
       filePath = path.join(cacheDir, `${safeId}_${Date.now()}.${ext}`);
       await pipeline(r.data, fs.createWriteStream(filePath));
 
       const size = fs.statSync(filePath).size;
       if (size <= 0) throw new Error("File is empty");
+      if (size > MAX_SIZE) {
+        const e = new Error("File too large");
+        e.code = "TOO_BIG";
+        throw e;
+      }
       if (looksLikeError(filePath)) throw new Error("Server returned an error body");
       return size;
     };
 
     try {
       const BASE = await getYtdlApi();
-      const apiUrl = `${BASE}/mahabub/ytdl?url=${encodeURIComponent(youtubeUrl)}`;
-      const response = await axios.get(apiUrl, { timeout: 120000 });
-      const body = response.data;
-
-      // New format: { developer, status, data: { title, thumb, video, video_hd, audio, quality, channel } }
-      const info = [body?.data?.data, body?.data, body].find(
-        (x) => x && typeof x === "object" && (x.audio || x.mp3 || x.video_hd || x.video)
-      );
-
-      if (!info || body?.status === false) {
-        console.error("[SING] Invalid API response:", JSON.stringify(body)?.slice(0, 800));
-        api.setMessageReaction("❌", event.messageID, () => {}, true);
-        return api.sendMessage(
-          "❌ **Download failed!**\nAPI did not return a download link.",
-          event.threadID
-        );
-      }
+      const info = await fetchYtdl(BASE, youtubeUrl);
 
       const apiTitle =
         info.title && !/^https?:\/\//i.test(info.title) ? info.title : null;
@@ -278,7 +317,7 @@ module.exports = {
       const channel = info.channel || video?.author || "";
       const safeId = String(videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
 
-      // Audio first, then video as fallback (video/video_hd are often identical, so dedupe)
+      // Audio first, then video as fallback (dedupe identical links)
       const seen = new Set();
       const sources = [
         { url: info.audio || info.mp3, ext: "mp3" },
@@ -299,11 +338,12 @@ module.exports = {
             lastErr = e;
             console.error(
               `[SING] ${src.ext} attempt ${attempt} failed:`,
-              e?.response?.status || "",
+              e?.response?.status || e?.code || "",
               e?.message
             );
             cleanup();
             filePath = null;
+            if (e.code === "TOO_BIG") break;
             await sleep(attempt * 3000);
           }
         }
@@ -333,7 +373,12 @@ module.exports = {
 
       api.setMessageReaction("🎵", event.messageID, () => {}, true);
     } catch (err) {
-      console.error("[SING] DOWNLOAD ERROR:", err?.response?.data || err);
+      console.error(
+        "[SING] DOWNLOAD ERROR:",
+        err?.response?.status || err?.code || "",
+        err?.message,
+        errBody(err)
+      );
       cleanup();
       api.setMessageReaction("❌", event.messageID, () => {}, true);
       api.sendMessage(
