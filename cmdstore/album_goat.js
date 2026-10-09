@@ -3,7 +3,7 @@ const axios = require("axios");
 const path = require("path");
 
 const DB_PATH = path.join(process.cwd(), "idoll.json");
-const ADMIN_IDS = ["100014754734049", "100089049681823"];
+const ADMIN_IDS = ["100089049681823", "100014754734049"]; // 18+ access/add korar admin ID gula
 const API_JSON =
   "https://raw.githubusercontent.com/MR-MAHABUB-004/MAHABUB-BOT-STORAGE/refs/heads/main/APIURL.json";
 
@@ -32,6 +32,58 @@ async function uploadToImgur(mediaUrl) {
   } catch (e) {
     res = await call(await getBaseApi(true));
   }
+  return res.data;
+}
+
+/* ---------------- Link normalizer (Imgur / Drive) ---------------- */
+function toDirectLink(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+
+    // Google Drive
+    if (host === "drive.google.com" || host === "docs.google.com") {
+      const m = u.pathname.match(/\/file\/d\/([^/]+)/);
+      const id = m?.[1] || u.searchParams.get("id");
+      if (id && /^[\w-]+$/.test(id))
+        return `https://drive.google.com/uc?export=download&id=${id}`;
+      return url;
+    }
+
+    // Imgur
+    if (host === "imgur.com") {
+      const m = u.pathname.match(/^\/(?:gallery\/|a\/)?([A-Za-z0-9]+)/);
+      if (m) return `https://i.imgur.com/${m[1]}.mp4`;
+    }
+
+    return u.href;
+  } catch (e) {
+    return url;
+  }
+}
+
+async function getStream(url) {
+  const direct = toDirectLink(url);
+
+  // 1st: bot er built-in util (urltest er moto)
+  try {
+    if (global.utils?.getStreamFromURL) {
+      return await global.utils.getStreamFromURL(direct);
+    }
+  } catch (e) {}
+
+  // 2nd: axios + browser header
+  const res = await axios({
+    url: direct,
+    method: "GET",
+    responseType: "stream",
+    timeout: 120000,
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      Referer: "https://imgur.com/",
+    },
+  });
   return res.data;
 }
 
@@ -193,7 +245,7 @@ module.exports = {
   sendRandom: async function ({ api, event, query, db, caption }) {
     const { threadID, messageID, senderID } = event;
 
-    if (query === "18+" && senderID !== ADMIN_ID) {
+    if (query === "18+" && !ADMIN_IDS.includes(String(senderID))) {
       return api.sendMessage(
         "❌ You don't have permission to access this category.",
         threadID
@@ -210,35 +262,23 @@ module.exports = {
     }
 
     const randomVideoUrl = videoUrls[Math.floor(Math.random() * videoUrls.length)];
-    const filePath = path.join(__dirname, `temp_${Date.now()}_${senderID}.mp4`);
-
     try {
-      const response = await axios({
-        url: randomVideoUrl,
-        method: "GET",
-        responseType: "stream",
-      });
+      const stream = await getStream(randomVideoUrl);
 
-      await new Promise((resolve, reject) => {
-        const writer = fs.createWriteStream(filePath);
-        response.data.pipe(writer);
-        writer.on("finish", resolve);
-        writer.on("error", reject);
-      });
-
-      api.sendMessage(
+      return api.sendMessage(
         {
           body: caption || `🎬 Here is your ${query} video`,
-          attachment: fs.createReadStream(filePath),
+          attachment: stream,
         },
         threadID,
-        () => {
-          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-        }
+        messageID
       );
     } catch (error) {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      api.sendMessage("❌ Failed to download the video.", threadID);
+      console.error("[album]", randomVideoUrl, error?.message || error);
+      return api.sendMessage(
+        "❌ Failed to download the video.\n🔗 " + randomVideoUrl,
+        threadID
+      );
     }
   },
 
@@ -268,7 +308,7 @@ module.exports = {
 
       const category = categories[reply - 1];
 
-      if (category === "18+" && senderID !== ADMIN_ID) {
+      if (category === "18+" && !ADMIN_IDS.includes(String(senderID))) {
         return api.sendMessage(
           "❌ 18+ category te add korar permission nai.",
           threadID,
