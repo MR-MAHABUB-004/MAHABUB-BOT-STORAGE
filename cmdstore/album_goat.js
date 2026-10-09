@@ -88,6 +88,35 @@ async function getStream(url) {
   return res.data;
 }
 
+/* ---------------- No-repeat picker (shuffle bag) ---------------- */
+const BAGS = {}; // category -> { queue: [], last: null }
+
+function pickVideo(category, urls) {
+  const list = [...new Set(urls)]; // duplicate link bad
+  if (list.length === 1) return list[0];
+
+  let bag = BAGS[category];
+  // list change hole (video add/remove) bag reset
+  if (!bag || bag.size !== list.length) bag = BAGS[category] = { queue: [], last: null, size: list.length };
+
+  if (bag.queue.length === 0) {
+    const q = [...list];
+    for (let i = q.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [q[i], q[j]] = [q[j], q[i]];
+    }
+    // notun round er prothom video jeno ager round er sesh video na hoy
+    if (q[q.length - 1] === bag.last && q.length > 1) {
+      [q[0], q[q.length - 1]] = [q[q.length - 1], q[0]];
+    }
+    bag.queue = q;
+  }
+
+  const next = bag.queue.pop();
+  bag.last = next;
+  return next;
+}
+
 /* ---------------- JSON helpers ---------------- */
 function readDB() {
   try {
@@ -122,7 +151,7 @@ async function sendRandom({ api, event, query, db, caption }) {
     );
   }
 
-  const randomVideoUrl = videoUrls[Math.floor(Math.random() * videoUrls.length)];
+  const randomVideoUrl = pickVideo(query, videoUrls);
   try {
     const stream = await getStream(randomVideoUrl);
 
