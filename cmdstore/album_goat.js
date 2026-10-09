@@ -84,6 +84,7 @@ async function getStream(url) {
       Referer: "https://imgur.com/",
     },
   });
+  res.data.path = "album_video.mp4";
   return res.data;
 }
 
@@ -99,6 +100,47 @@ function readDB() {
 
 function writeDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), "utf-8");
+}
+
+/* ---------------- Send random video ---------------- */
+async function sendRandom({ api, event, query, db, caption }) {
+  const { threadID, messageID, senderID } = event;
+
+  if (query === "18+" && !ADMIN_IDS.includes(String(senderID))) {
+    return api.sendMessage(
+      "❌ You don't have permission to access this category.",
+      threadID
+    );
+  }
+
+  const videoUrls = db[query];
+  if (!videoUrls || videoUrls.length === 0) {
+    return api.sendMessage(
+      "❌ No videos found for this category.",
+      threadID,
+      messageID
+    );
+  }
+
+  const randomVideoUrl = videoUrls[Math.floor(Math.random() * videoUrls.length)];
+  try {
+    const stream = await getStream(randomVideoUrl);
+
+    return api.sendMessage(
+      {
+        body: caption || `🎬 Here is your ${query} video`,
+        attachment: stream,
+      },
+      threadID,
+      messageID
+    );
+  } catch (error) {
+    console.error("[album]", randomVideoUrl, error?.message || error);
+    return api.sendMessage(
+      "❌ Failed to download the video.\n🔗 " + randomVideoUrl,
+      threadID
+    );
+  }
 }
 
 module.exports = {
@@ -185,7 +227,7 @@ module.exports = {
       const db = readDB();
       const key = args[0].toLowerCase();
       if (db[key]) {
-        return this.sendRandom({ api, event, query: key, db });
+        return sendRandom({ api, event, query: key, db });
       }
       return api.sendMessage(
         `❌ "${key}" naame kono category nai.`,
@@ -241,48 +283,23 @@ module.exports = {
     );
   },
 
-  /* ---------------- Send random video ---------------- */
-  sendRandom: async function ({ api, event, query, db, caption }) {
-    const { threadID, messageID, senderID } = event;
-
-    if (query === "18+" && !ADMIN_IDS.includes(String(senderID))) {
-      return api.sendMessage(
-        "❌ You don't have permission to access this category.",
-        threadID
-      );
-    }
-
-    const videoUrls = db[query];
-    if (!videoUrls || videoUrls.length === 0) {
-      return api.sendMessage(
-        "❌ No videos found for this category.",
-        threadID,
-        messageID
-      );
-    }
-
-    const randomVideoUrl = videoUrls[Math.floor(Math.random() * videoUrls.length)];
+  onReply: async function (args) {
     try {
-      const stream = await getStream(randomVideoUrl);
-
-      return api.sendMessage(
-        {
-          body: caption || `🎬 Here is your ${query} video`,
-          attachment: stream,
-        },
-        threadID,
-        messageID
-      );
-    } catch (error) {
-      console.error("[album]", randomVideoUrl, error?.message || error);
-      return api.sendMessage(
-        "❌ Failed to download the video.\n🔗 " + randomVideoUrl,
-        threadID
-      );
+      await handleReply(args);
+    } catch (e) {
+      console.error("[album onReply]", e);
+      try {
+        args.api.sendMessage(
+          "⚠️ Album error: " + (e?.message || e),
+          args.event.threadID,
+          args.event.messageID
+        );
+      } catch (_) {}
     }
   },
+};
 
-  onReply: async function ({ api, event, Reply }) {
+async function handleReply({ api, event, Reply }) {
     const { threadID, messageID, senderID } = event;
 
     // Shudhu je command dilo se-i reply korte parbe
@@ -401,12 +418,11 @@ module.exports = {
       "𝐇𝐞𝐫𝐞 𝐢𝐬 𝐲𝐨𝐮𝐫 𝐅𝐫𝐢𝐞𝐧𝐝𝐬 𝐕𝐢𝐝𝐞𝐨 👫🏼",
     ];
 
-    return this.sendRandom({
+    return sendRandom({
       api,
       event,
       query: categories[reply - 1],
       db: readDB(),
       caption: captions[reply - 1],
     });
-  },
-};
+}
