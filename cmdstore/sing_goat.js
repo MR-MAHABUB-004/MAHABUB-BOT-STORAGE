@@ -33,11 +33,6 @@ async function getBaseApi() {
   return String(cfg.api).replace(/\/+$/, "");
 }
 
-async function getYtdlApi() {
-  // ytdl uses the same base API as search
-  return getBaseApi();
-}
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Safe error-body printer (stream bodies are skipped)
@@ -51,24 +46,24 @@ const errBody = (err) => {
   }
 };
 
-// Call ytdl API (takes ~20s, Render may cold-start) with retry
-async function fetchYtdl(BASE, youtubeUrl) {
-  const apiUrl = `${BASE}/mahabub/ytdl?url=${encodeURIComponent(youtubeUrl)}`;
+// NEW: call ytmp3 API with retry -> returns the mp3 download URL
+// Response: { status, developer, videoId, data: { downloadUrl } }
+async function fetchMp3Link(BASE, youtubeUrl) {
+  const apiUrl = `${BASE}/mahabub/ytmp3?url=${encodeURIComponent(youtubeUrl)}`;
   let lastErr = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await axios.get(apiUrl, { timeout: 120000 });
       const body = res.data;
-      // Format: { developer, status, data: { title, thumb, video, video_hd, audio, quality, channel } }
-      const info = [body?.data?.data, body?.data, body].find(
-        (x) => x && typeof x === "object" && (x.audio || x.mp3 || x.video_hd || x.video)
-      );
-      if (info && body?.status !== false && body?.data?.status !== false) return info;
+      const link = body?.data?.downloadUrl || body?.downloadUrl;
+      if (body?.status !== false && typeof link === "string" && /^https?:\/\//i.test(link)) {
+        return link;
+      }
       lastErr = new Error("API returned no download link");
       console.error("[SING] Invalid API response:", JSON.stringify(body)?.slice(0, 500));
     } catch (e) {
       lastErr = e;
-      console.error(`[SING] ytdl attempt ${attempt} failed:`, e?.response?.status || e?.code || "", e?.message);
+      console.error(`[SING] ytmp3 attempt ${attempt} failed:`, e?.response?.status || e?.code || "", e?.message);
     }
     if (attempt < 3) await sleep(attempt * 3000);
   }
@@ -78,7 +73,7 @@ async function fetchYtdl(BASE, youtubeUrl) {
 module.exports = {
   config: {
     name: "sing",
-    version: "5.2",
+    version: "5.3",
     author: "@𝐌𝐑᭄﹅ 𝐌𝐀𝐇𝐀𝐁𝐔𝐁﹅ メꪜ",
     countDown: 5,
     role: 0,
@@ -308,44 +303,32 @@ module.exports = {
     };
 
     try {
-      const BASE = await getYtdlApi();
-      const info = await fetchYtdl(BASE, youtubeUrl);
-
-      const apiTitle =
-        info.title && !/^https?:\/\//i.test(info.title) ? info.title : null;
-      const title = apiTitle || video?.title || "Unknown Song";
-      const channel = info.channel || video?.author || "";
+      const BASE = await getBaseApi();
       const safeId = String(videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
-
-      // Audio first, then video as fallback (dedupe identical links)
-      const seen = new Set();
-      const sources = [
-        { url: info.audio || info.mp3, ext: "mp3" },
-        { url: info.video_hd, ext: "mp4" },
-        { url: info.video, ext: "mp4" }
-      ].filter((s) => s.url && !seen.has(s.url) && seen.add(s.url));
+      const title = video?.title || "Unknown Song";
+      const channel = video?.author || "";
 
       let size = 0;
       let lastErr = null;
 
-      outer: for (const src of sources) {
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            size = await downloadFile(src.url, src.ext, safeId);
-            lastErr = null;
-            break outer;
-          } catch (e) {
-            lastErr = e;
-            console.error(
-              `[SING] ${src.ext} attempt ${attempt} failed:`,
-              e?.response?.status || e?.code || "",
-              e?.message
-            );
-            cleanup();
-            filePath = null;
-            if (e.code === "TOO_BIG") break;
-            await sleep(attempt * 3000);
-          }
+      // Each attempt fetches a fresh tokenized link (links can expire)
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const mp3Url = await fetchMp3Link(BASE, youtubeUrl);
+          size = await downloadFile(mp3Url, "mp3", safeId);
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          console.error(
+            `[SING] mp3 attempt ${attempt} failed:`,
+            e?.response?.status || e?.code || "",
+            e?.message
+          );
+          cleanup();
+          filePath = null;
+          if (e.code === "TOO_BIG") break;
+          if (attempt < 3) await sleep(attempt * 3000);
         }
       }
 
@@ -382,7 +365,9 @@ module.exports = {
       cleanup();
       api.setMessageReaction("❌", event.messageID, () => {}, true);
       api.sendMessage(
-        "❌ **Audio download error!**\nPlease try again later.",
+        err?.code === "TOO_BIG"
+          ? "❌ **File too large to send!** (max 25 MB)"
+          : "❌ **Audio download error!**\nPlease try again later.",
         event.threadID
       );
     }
