@@ -14,7 +14,9 @@ const API_JSON =
 const DL_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-  Accept: "*/*"
+  Accept: "*/*",
+  Referer: "https://y2dl.space/",
+  Origin: "https://y2dl.space"
 };
 
 let API_CACHE = null;
@@ -312,9 +314,13 @@ module.exports = {
       let lastErr = null;
 
       // Each attempt fetches a fresh tokenized link (links can expire)
-      for (let attempt = 1; attempt <= 3; attempt++) {
+      // Get the link once; the file may still be converting, so retry the SAME link
+      // with longer waits. Only request a fresh link after several failures.
+      let mp3Url = await fetchMp3Link(BASE, youtubeUrl);
+      console.log("[SING] mp3 link host:", new URL(mp3Url).host);
+
+      for (let attempt = 1; attempt <= 6; attempt++) {
         try {
-          const mp3Url = await fetchMp3Link(BASE, youtubeUrl);
           size = await downloadFile(mp3Url, "mp3", safeId);
           lastErr = null;
           break;
@@ -323,12 +329,16 @@ module.exports = {
           console.error(
             `[SING] mp3 attempt ${attempt} failed:`,
             e?.response?.status || e?.code || "",
-            e?.message
+            e?.message,
+            errBody(e)
           );
           cleanup();
           filePath = null;
           if (e.code === "TOO_BIG") break;
-          if (attempt < 3) await sleep(attempt * 3000);
+          if (attempt === 4) {
+            try { mp3Url = await fetchMp3Link(BASE, youtubeUrl); } catch (_) {}
+          }
+          if (attempt < 6) await sleep(4000);
         }
       }
 
