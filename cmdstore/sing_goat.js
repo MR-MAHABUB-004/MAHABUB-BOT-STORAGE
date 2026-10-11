@@ -14,9 +14,7 @@ const API_JSON =
 const DL_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-  Accept: "*/*",
-  Referer: "https://y2dl.space/",
-  Origin: "https://y2dl.space"
+  Accept: "*/*"
 };
 
 let API_CACHE = null;
@@ -57,10 +55,9 @@ async function fetchMp3Link(BASE, youtubeUrl) {
     try {
       const res = await axios.get(apiUrl, { timeout: 120000 });
       const body = res.data;
-      const link = body?.data?.downloadUrl || body?.downloadUrl;
-      if (body?.status !== false && typeof link === "string" && /^https?:\/\//i.test(link)) {
-        return link;
-      }
+      const links = [body?.data?.downloadUrl, body?.downloadUrl, body?.downloadLink]
+        .filter((l, i, a) => typeof l === "string" && /^https?:\/\//i.test(l) && a.indexOf(l) === i);
+      if (body?.status !== false && links.length) return links;
       lastErr = new Error("API returned no download link");
       console.error("[SING] Invalid API response:", JSON.stringify(body)?.slice(0, 500));
     } catch (e) {
@@ -316,30 +313,32 @@ module.exports = {
       // Each attempt fetches a fresh tokenized link (links can expire)
       // Get the link once; the file may still be converting, so retry the SAME link
       // with longer waits. Only request a fresh link after several failures.
-      let mp3Url = await fetchMp3Link(BASE, youtubeUrl);
-      console.log("[SING] mp3 link host:", new URL(mp3Url).host);
+      let mp3Urls = await fetchMp3Link(BASE, youtubeUrl);
+      console.log("[SING] mp3 link hosts:", mp3Urls.map((u) => new URL(u).host).join(", "));
 
-      for (let attempt = 1; attempt <= 6; attempt++) {
-        try {
-          size = await downloadFile(mp3Url, "mp3", safeId);
-          lastErr = null;
-          break;
-        } catch (e) {
-          lastErr = e;
-          console.error(
-            `[SING] mp3 attempt ${attempt} failed:`,
-            e?.response?.status || e?.code || "",
-            e?.message,
-            errBody(e)
-          );
-          cleanup();
-          filePath = null;
-          if (e.code === "TOO_BIG") break;
-          if (attempt === 4) {
-            try { mp3Url = await fetchMp3Link(BASE, youtubeUrl); } catch (_) {}
+      outer: for (let attempt = 1; attempt <= 4; attempt++) {
+        for (const mp3Url of mp3Urls) {
+          try {
+            size = await downloadFile(mp3Url, "mp3", safeId);
+            lastErr = null;
+            break outer;
+          } catch (e) {
+            lastErr = e;
+            console.error(
+              `[SING] attempt ${attempt} (${new URL(mp3Url).host}) failed:`,
+              e?.response?.status || e?.code || "",
+              e?.message,
+              errBody(e)
+            );
+            cleanup();
+            filePath = null;
+            if (e.code === "TOO_BIG") break outer;
           }
-          if (attempt < 6) await sleep(4000);
         }
+        if (attempt === 2) {
+          try { mp3Urls = await fetchMp3Link(BASE, youtubeUrl); } catch (_) {}
+        }
+        if (attempt < 4) await sleep(4000);
       }
 
       if (lastErr || !filePath) throw lastErr || new Error("No file downloaded");
