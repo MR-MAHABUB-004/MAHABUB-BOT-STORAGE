@@ -1,141 +1,134 @@
 const axios = require("axios");
 
 const API_JSON =
-"https://raw.githubusercontent.com/MR-MAHABUB-004/MAHABUB-BOT-STORAGE/refs/heads/main/APIURL.json";
+  "https://raw.githubusercontent.com/MR-MAHABUB-004/MAHABUB-BOT-STORAGE/refs/heads/main/APIURL.json";
 
 let BASE_API = null;
 
 async function getBaseApi() {
-if (BASE_API) return BASE_API;
+  if (BASE_API) return BASE_API;
 
-const res = await axios.get(API_JSON, { timeout: 15000 });
+  const res = await axios.get(API_JSON, { timeout: 15000 });
 
-if (!res.data?.api) {
-throw new Error("API URL not found");
-}
+  if (!res.data?.api) {
+    throw new Error("API URL not found");
+  }
 
-BASE_API = String(res.data.api).replace(//+$/, "");
-return BASE_API;
+  // Remove trailing slashes (RegExp constructor avoids backslash paste issues)
+  BASE_API = String(res.data.api).replace(new RegExp("/+$"), "");
+  return BASE_API;
 }
 
 function formatDate(date) {
-if (!date) return "N/A";
+  if (!date) return "N/A";
 
-const parsed = new Date(date);
+  const parsed = new Date(date);
 
-if (Number.isNaN(parsed.getTime())) return date;
+  if (Number.isNaN(parsed.getTime())) return date;
 
-return parsed.toLocaleString("en-GB", {
-timeZone: "Asia/Dhaka",
-day: "2-digit",
-month: "short",
-year: "numeric",
-hour: "2-digit",
-minute: "2-digit",
-hour12: true
-});
+  return parsed.toLocaleString("en-GB", {
+    timeZone: "Asia/Dhaka",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
 }
 
 function formatNumber(number) {
-return Number(number || 0).toLocaleString("en-US");
+  return Number(number || 0).toLocaleString("en-US");
 }
 
 function cleanValue(value) {
-if (value === undefined || value === null || value === "") {
-return "N/A";
+  if (value === undefined || value === null || value === "") {
+    return "N/A";
+  }
+
+  return String(value);
 }
 
-return String(value);
+const RANKS = {
+  301: "Bronze",
+  302: "Silver",
+  303: "Gold",
+  304: "Platinum",
+  305: "Diamond",
+  306: "Heroic",
+  307: "Elite Heroic",
+  308: "Master",
+  309: "Grandmaster",
+  310: "Grandmaster"
+};
+
+function rankName(value) {
+  return RANKS[value] || `Rank ID: ${cleanValue(value)}`;
 }
 
 module.exports = {
-config: {
-name: "ffinfo",
-aliases: ["ff", "freefire", "ffuid"],
-version: "2.0",
-author: "Mahabub",
-countDown: 5,
-role: 0,
-shortDescription: {
-en: "Get Free Fire account information"
-},
-longDescription: {
-en: "Get detailed Free Fire player, rank, profile, pet and guild information."
-},
-category: "Information",
-guide: {
-en: "{pn} <uid>"
-},
-envConfig: {}
-},
+  config: {
+    name: "ffinfo",
+    aliases: ["ff", "freefire", "ffuid"],
+    version: "2.0",
+    author: "Mahabub",
+    countDown: 5,
+    role: 0,
+    shortDescription: {
+      en: "Get Free Fire account information"
+    },
+    longDescription: {
+      en: "Get detailed Free Fire player, rank, profile, pet and guild information."
+    },
+    category: "Information",
+    guide: {
+      en: "{pn} <uid>"
+    },
+    envConfig: {}
+  },
 
-onStart: async function ({ message, args }) {
-try {
-const uid = String(args[0] || "").trim();
+  onStart: async function ({ message, args }) {
+    try {
+      const uid = String(args[0] || "").trim();
 
-  if (!/^\d{8,20}$/.test(uid)) {
-    return message.reply(
-      "❌ | Invalid Free Fire UID!\n\n" +
-      "Usage: ffinfo <uid>\n" +
-      "Example: ffinfo 6605263063"
-    );
-  }
+      if (!/^\d{8,20}$/.test(uid)) {
+        return message.reply(
+          "❌ | Invalid Free Fire UID!\n\n" +
+            "Usage: ffinfo <uid>\n" +
+            "Example: ffinfo 6605263063"
+        );
+      }
 
-  await message.reply("🔎 | Fetching Free Fire player information...");
+      await message.reply("🔎 | Fetching Free Fire player information...");
 
-  const baseApi = await getBaseApi();
+      const baseApi = await getBaseApi();
 
-  const response = await axios.get(
-    `${baseApi}/mahabub/ffinfo`,
-    {
-      params: { uid },
-      timeout: 25000
-    }
-  );
+      const response = await axios.get(`${baseApi}/mahabub/ffinfo`, {
+        params: { uid },
+        timeout: 25000
+      });
 
-  const result = response.data;
+      const result = response.data;
 
-  if (
-    !result ||
-    result.status !== true ||
-    !result.data?.account
-  ) {
-    return message.reply(
-      "❌ | Free Fire player information not found.\n" +
-      `Message: ${result?.message || result?.error || "Invalid API response"}`
-    );
-  }
+      if (!result || result.status !== true || !result.data?.account) {
+        return message.reply(
+          "❌ | Free Fire player information not found.\n" +
+            `Message: ${result?.message || result?.error || "Invalid API response"}`
+        );
+      }
 
-  const data = result.data;
-  const account = data.account || {};
-  const rank = data.rank || {};
-  const profile = data.profile || {};
-  const pet = data.pet || {};
-  const guild = data.guild || {};
-  const leader = guild.leader || {};
+      const data = result.data;
+      const account = data.account || {};
+      const rank = data.rank || {};
+      const profile = data.profile || {};
+      const pet = data.pet || {};
+      const guild = data.guild || {};
+      const leader = guild.leader || {};
 
-  const brRank = rank.br_max_rank;
-  const csRank = rank.cs_max_rank;
+      const brRank = rank.br_max_rank;
+      const csRank = rank.cs_max_rank;
 
-  const rankName = (value) => {
-    const ranks = {
-      301: "Bronze",
-      302: "Silver",
-      303: "Gold",
-      304: "Platinum",
-      305: "Diamond",
-      306: "Heroic",
-      307: "Elite Heroic",
-      308: "Master",
-      309: "Grandmaster",
-      310: "Grandmaster"
-    };
-
-    return ranks[value] || `Rank ID: ${cleanValue(value)}`;
-  };
-
-  const text =
-
+      const text =
 `╭━━━『 FREE FIRE INFO 』━━━╮
 ┃ 🎮 ACCOUNT INFORMATION
 ┣━━━━━━━━━━━━━━━━━━━━
@@ -202,29 +195,20 @@ const uid = String(args[0] || "").trim();
 
    ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴍᴀʜᴀʙᴜʙ ʙᴏᴛ`;
 
-  return message.reply(text);
+      return message.reply(text);
+    } catch (err) {
+      console.error("[FFINFO ERROR]", err.response?.data || err.message);
 
-} catch (err) {
-  console.error(
-    "[FFINFO ERROR]",
-    err.response?.data || err.message
-  );
+      if (err.code === "ECONNABORTED") {
+        return message.reply("⏱️ | API request timed out. Please try again.");
+      }
 
-  if (err.code === "ECONNABORTED") {
-    return message.reply(
-      "⏱️ | API request timed out. Please try again."
-    );
+      return message.reply(
+        "❌ | Failed to fetch Free Fire information.\n" +
+          `Reason: ${
+            err.response?.data?.message || err.message || "Unknown error"
+          }`
+      );
+    }
   }
-
-  return message.reply(
-    "❌ | Failed to fetch Free Fire information.\n" +
-    `Reason: ${
-      err.response?.data?.message ||
-      err.message ||
-      "Unknown error"
-    }`
-  );
-}
-
-}
 };
