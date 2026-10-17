@@ -15,15 +15,15 @@ let BASE_API = null;
 async function getBaseApi() {
   if (BASE_API) return BASE_API;
 
-  const res = await axios.get(API_JSON, {
+  const response = await axios.get(API_JSON, {
     timeout: 15000
   });
 
-  if (!res.data?.api) {
+  if (!response.data?.api) {
     throw new Error("API URL not found in APIURL.json");
   }
 
-  BASE_API = String(res.data.api).replace(/\/+$/, "");
+  BASE_API = String(response.data.api).replace(/\/+$/, "");
 
   return BASE_API;
 }
@@ -32,7 +32,7 @@ module.exports = {
   config: {
     name: "pinterest",
     aliases: ["pin"],
-    version: "1.0.0",
+    version: "1.1.0",
     author: "MAHABUB",
     role: 0,
     countDown: 20,
@@ -41,7 +41,12 @@ module.exports = {
     },
     category: "media",
     guide: {
-      en: "{pn} <search query> [count]\nExample: {pn} Itachi\nExample: {pn} Itachi - 15"
+      en:
+        "{pn} <search query>\n" +
+        "{pn} <search query> - <count>\n\n" +
+        "Example: {pn} itachi\n" +
+        "Example: {pn} itachi-10\n" +
+        "Example: {pn} itachi - 15"
     }
   },
 
@@ -49,15 +54,16 @@ module.exports = {
     let cacheDir;
 
     try {
-      // Parse search query and image count.
+      // 1. Read input.
       const input = args.join(" ").trim();
 
       if (!input) {
         return api.sendMessage(
           "📌 Pinterest Image Search\n\n" +
           "Usage:\n" +
-          "pin Itachi\n" +
-          "pin Itachi - 15\n\n" +
+          "pin itachi\n" +
+          "pin itachi-10\n" +
+          "pin itachi - 15\n\n" +
           "Default: 10 images\n" +
           "Maximum: 50 images",
           event.threadID,
@@ -65,11 +71,11 @@ module.exports = {
         );
       }
 
+      // 2. Parse query and count.
       let searchQuery = input;
       let count = 10;
 
-      // Supports: pin Itachi - 15
-      const match = input.match(/^(.*?)\s+-\s*(\d+)\s*$/);
+      const match = input.match(/^(.*?)\s*-\s*(\d+)\s*$/);
 
       if (match) {
         searchQuery = match[1].trim();
@@ -78,7 +84,7 @@ module.exports = {
 
       if (!searchQuery) {
         return api.sendMessage(
-          "❌ Please enter a valid search query.",
+          "❌ Please provide a search query.",
           event.threadID,
           event.messageID
         );
@@ -90,11 +96,15 @@ module.exports = {
 
       count = Math.min(count, 50);
 
-      // Get API base URL.
-      const BASE_API_URL = await getBaseApi();
-      const endpoint = `${BASE_API_URL}/mahabub/pin`;
+      // 3. Get Base API.
+      const baseApi = await getBaseApi();
+      const endpoint = `${baseApi}/mahabub/pin`;
 
-      // Request Pinterest images.
+      console.log("[PINTEREST] API:", endpoint);
+      console.log("[PINTEREST] Search:", searchQuery);
+      console.log("[PINTEREST] Count:", count);
+
+      // 4. Request images.
       const response = await axios.get(endpoint, {
         params: {
           search: searchQuery,
@@ -108,13 +118,9 @@ module.exports = {
 
       const body = response.data;
 
-      console.log("[PINTEREST API]", {
-        status: body?.status,
-        total: body?.total,
-        results: Array.isArray(body?.results)
-          ? body.results.length
-          : "invalid"
-      });
+      console.log("[PINTEREST] HTTP:", response.status);
+      console.log("[PINTEREST] Status:", body?.status);
+      console.log("[PINTEREST] Total:", body?.total);
 
       if (body?.status !== "success") {
         throw new Error(
@@ -122,27 +128,42 @@ module.exports = {
         );
       }
 
-      // Correct API response:
-      // { status: "success", results: [{ image_url: "..." }] }
+      // 5. Parse API response.
+      // Expected:
+      // {
+      //   status: "success",
+      //   results: [{ image_url: "https://..." }]
+      // }
+
       const results = Array.isArray(body.results)
         ? body.results
         : [];
 
       const images = results
-        .map(item => item?.image_url)
+        .map(item => {
+          if (typeof item === "string") return item;
+          return item?.image_url;
+        })
         .filter(url =>
           typeof url === "string" &&
           /^https?:\/\//i.test(url)
         )
         .slice(0, count);
 
+      console.log("[PINTEREST] Valid images:", images.length);
+
       if (images.length === 0) {
+        console.error(
+          "[PINTEREST] Invalid response:",
+          JSON.stringify(body).slice(0, 2000)
+        );
+
         throw new Error(
-          "API returned no valid image URLs. Check API response."
+          "API returned no valid image URLs. Check PM2 logs."
         );
       }
 
-      // Create a unique temporary directory per request.
+      // 6. Create unique temporary directory.
       cacheDir = path.join(
         os.tmpdir(),
         "mahabub-bot-pinterest",
@@ -153,10 +174,10 @@ module.exports = {
         recursive: true
       });
 
-      const attachments = [];
+      const downloadedFiles = [];
       let failed = 0;
 
-      // Download images sequentially for stability.
+      // 7. Download images.
       for (let i = 0; i < images.length; i++) {
         const imageUrl = images[i];
 
@@ -166,6 +187,10 @@ module.exports = {
         );
 
         try {
+          console.log(
+            `[PINTEREST] Downloading ${i + 1}/${images.length}`
+          );
+
           const imageResponse = await axios.get(imageUrl, {
             responseType: "stream",
             timeout: 25000,
@@ -203,19 +228,21 @@ module.exports = {
           const stat = await fs.promises.stat(imagePath);
 
           if (stat.size === 0) {
-            throw new Error("Downloaded file is empty");
+            throw new Error("Downloaded image is empty");
           }
 
-          attachments.push(
-            fs.createReadStream(imagePath)
+          downloadedFiles.push(imagePath);
+
+          console.log(
+            `[PINTEREST] Downloaded ${i + 1}: ${stat.size} bytes`
           );
 
-        } catch (err) {
+        } catch (error) {
           failed++;
 
           console.error(
             `[PINTEREST] Image ${i + 1} failed:`,
-            err.message
+            error.message
           );
 
           await fs.promises.rm(imagePath, {
@@ -224,23 +251,31 @@ module.exports = {
         }
       }
 
-      if (attachments.length === 0) {
+      if (downloadedFiles.length === 0) {
         throw new Error(
-          "All image downloads failed. Please try again."
+          "All image downloads failed. Check PM2 logs."
         );
       }
+
+      // 8. Send attachments.
+      const attachments = downloadedFiles.map(file =>
+        fs.createReadStream(file)
+      );
 
       const messageBody =
         `📌 Pinterest Search Results\n\n` +
         `🔎 Search: ${searchQuery}\n` +
-        `🖼️ Images: ${attachments.length}/${images.length}\n` +
+        `🖼️ Images: ${downloadedFiles.length}/${images.length}\n` +
         `👑 Developer: MAHABUB\n` +
         `💠 Credit: ${body.credit || "NIROB TOP"}` +
         (failed > 0
           ? `\n⚠️ Failed downloads: ${failed}`
           : "");
 
-      // Send attachments.
+      console.log(
+        `[PINTEREST] Sending ${attachments.length} attachments`
+      );
+
       await api.sendMessage(
         {
           body: messageBody,
@@ -251,44 +286,53 @@ module.exports = {
       );
 
       console.log(
-        `[PINTEREST] Success: ${searchQuery} | ` +
-        `${attachments.length}/${images.length} images`
+        `[PINTEREST] SUCCESS: ${searchQuery} | ` +
+        `${downloadedFiles.length}/${images.length}`
       );
 
     } catch (error) {
-      console.error("[PINTEREST ERROR]", error);
+      console.error("[PINTEREST ERROR]", error.stack || error);
 
-      let message = error.message || "Unknown error";
+      let errorMessage = error.message || "Unknown error";
 
       if (error.response) {
-        message =
+        const data = error.response.data;
+
+        errorMessage =
           `HTTP ${error.response.status}: ` +
-          (typeof error.response.data === "string"
-            ? error.response.data.slice(0, 200)
-            : "API request failed");
+          (
+            typeof data === "string"
+              ? data.slice(0, 200)
+              : JSON.stringify(data).slice(0, 200)
+          );
       } else if (
         error.code === "ECONNABORTED" ||
         error.code === "ETIMEDOUT"
       ) {
-        message = "Request timed out. Please try again.";
+        errorMessage = "Request timed out. Please try again.";
       }
 
       await api.sendMessage(
-        `❌ Pinterest Error\n\n${message}`,
+        `❌ Pinterest Error\n\n${errorMessage}`,
         event.threadID,
         event.messageID
-      ).catch(() => {});
+      ).catch(sendError => {
+        console.error(
+          "[PINTEREST] Error message failed:",
+          sendError.message
+        );
+      });
 
     } finally {
-      // Clean up temporary files after sending.
+      // 9. Clean temporary files.
       if (cacheDir) {
         await fs.promises.rm(cacheDir, {
           recursive: true,
           force: true
-        }).catch(err => {
+        }).catch(error => {
           console.error(
-            "[PINTEREST] Cleanup failed:",
-            err.message
+            "[PINTEREST] Cleanup error:",
+            error.message
           );
         });
       }
