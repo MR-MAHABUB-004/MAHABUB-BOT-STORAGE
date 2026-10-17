@@ -4,9 +4,12 @@ const path = require("path");
 const { pipeline } = require("stream/promises");
 
 const cacheDir = path.join(__dirname, "cache");
-if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
-const MAX_SIZE = 25 * 1024 * 1024; // Messenger attachment limit
+if (!fs.existsSync(cacheDir)) {
+  fs.mkdirSync(cacheDir, { recursive: true });
+}
+
+const MAX_SIZE = 25 * 1024 * 1024;
 
 const API_JSON =
   "https://raw.githubusercontent.com/MR-MAHABUB-004/MAHABUB-BOT-STORAGE/refs/heads/main/APIURL.json";
@@ -21,63 +24,144 @@ let API_CACHE = null;
 
 async function getApiConfig() {
   if (API_CACHE) return API_CACHE;
-  const res = await axios.get(API_JSON, { timeout: 15000 });
-  if (!res.data || typeof res.data !== "object") throw new Error("API config invalid");
-  API_CACHE = res.data;
+
+  const response = await axios.get(API_JSON, {
+    timeout: 15000
+  });
+
+  if (!response.data || typeof response.data !== "object") {
+    throw new Error("API config invalid");
+  }
+
+  API_CACHE = response.data;
   return API_CACHE;
 }
 
 async function getBaseApi() {
-  const cfg = await getApiConfig();
-  if (!cfg.api) throw new Error("API URL not found");
-  return String(cfg.api).replace(/\/+$/, "");
+  const config = await getApiConfig();
+
+  if (!config.api) {
+    throw new Error("API URL not found in APIURL.json");
+  }
+
+  return String(config.api).replace(/\/+$/, "");
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
-// Safe error-body printer (stream bodies are skipped)
-const errBody = (err) => {
-  const d = err?.response?.data;
-  if (!d || typeof d.pipe === "function") return "";
+function getErrorBody(error) {
+  const data = error?.response?.data;
+
+  if (!data || typeof data.pipe === "function") {
+    return "";
+  }
+
   try {
-    return typeof d === "string" ? d.slice(0, 300) : JSON.stringify(d).slice(0, 300);
+    return typeof data === "string"
+      ? data.slice(0, 300)
+      : JSON.stringify(data).slice(0, 300);
   } catch {
     return "";
   }
-};
+}
 
-// NEW: call ytmp3 API with retry -> returns the mp3 download URL
-// Response: { status, developer, videoId, data: { downloadUrl } }
+// ============================================================
+// YTMP3V3 API
+// Endpoint: BASE/mahabub/ytmp3v3?url=
+// ============================================================
+
 async function fetchMp3Link(BASE, youtubeUrl) {
-  const apiUrl = `${BASE}/mahabub/ytmp3?url=${encodeURIComponent(youtubeUrl)}`;
-  let lastErr = null;
+  const apiUrl =
+    `${BASE}/mahabub/ytmp3v3?url=${encodeURIComponent(youtubeUrl)}`;
+
+  let lastError = null;
+
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const res = await axios.get(apiUrl, { timeout: 120000 });
-      const body = res.data;
-      const links = [body?.data?.downloadUrl, body?.downloadUrl, body?.downloadLink]
-        .filter((l, i, a) => typeof l === "string" && /^https?:\/\//i.test(l) && a.indexOf(l) === i);
-      if (body?.status !== false && links.length) return links;
-      lastErr = new Error("API returned no download link");
-      console.error("[SING] Invalid API response:", JSON.stringify(body)?.slice(0, 500));
-    } catch (e) {
-      lastErr = e;
-      console.error(`[SING] ytmp3 attempt ${attempt} failed:`, e?.response?.status || e?.code || "", e?.message);
+      const response = await axios.get(apiUrl, {
+        timeout: 120000,
+        headers: {
+          "User-Agent": DL_HEADERS["User-Agent"],
+          Accept: "application/json"
+        }
+      });
+
+      const data = response.data;
+
+      if (!data || typeof data !== "object") {
+        throw new Error("Invalid API response");
+      }
+
+      const downloadUrls = [
+        data.download_url,
+        data.data?.download_url,
+        data.downloadUrl,
+        data.data?.downloadUrl,
+        data.downloadLink,
+        data.data?.downloadLink
+      ].filter(
+        (url, index, array) =>
+          typeof url === "string" &&
+          /^https?:\/\//i.test(url) &&
+          array.indexOf(url) === index
+      );
+
+      if (data.status === "success" && downloadUrls.length > 0) {
+        console.log(
+          "[SING] API success:",
+          data.title || "Unknown",
+          "| Bitrate:",
+          data.bitrate || "Unknown"
+        );
+
+        return {
+          urls: downloadUrls,
+          info: data
+        };
+      }
+
+      lastError = new Error(
+        data.message ||
+          data.error ||
+          "API returned no valid download_url"
+      );
+
+      console.error(
+        "[SING] Invalid API response:",
+        JSON.stringify(data).slice(0, 500)
+      );
+    } catch (error) {
+      lastError = error;
+
+      console.error(
+        `[SING] ytmp3v3 attempt ${attempt} failed:`,
+        error.response?.status || error.code || "",
+        error.message
+      );
     }
-    if (attempt < 3) await sleep(attempt * 3000);
+
+    if (attempt < 3) {
+      await sleep(attempt * 3000);
+    }
   }
-  throw lastErr;
+
+  throw lastError || new Error("Unable to get MP3 download URL");
 }
+
+// ============================================================
+// COMMAND
+// ============================================================
 
 module.exports = {
   config: {
     name: "sing",
-    version: "5.3",
-    author: "@𝐌𝐑᭄﹅ 𝐌𝐀𝐇𝐀𝐁𝐔𝐁﹅ メꪜ",
+    version: "6.0",
+    author: "MAHABUB",
     countDown: 5,
     role: 0,
     longDescription: {
-      en: "🎶 Search song → reply number → auto download → auto unsend → auto delete"
+      en: "Search songs, reply with a number, and download MP3 audio."
     },
     category: "media",
     guide: {
@@ -88,113 +172,190 @@ module.exports = {
   // ============================================================
   // SONG SEARCH
   // ============================================================
+
   onStart: async ({ api, args, event }) => {
     if (!args.length) {
       return api.sendMessage(
-        "❌ **Song name dao na!**\n\n📌 Example:\n➤ `sing toh phir aao`",
+        "❌ Song name dao!\n\n" +
+          "📌 Example:\n" +
+          "sing toh phir aao",
         event.threadID,
         event.messageID
       );
     }
 
-    api.setMessageReaction("⏳", event.messageID, () => {}, true);
+    api.setMessageReaction(
+      "⏳",
+      event.messageID,
+      () => {},
+      true
+    );
 
     try {
       const BASE = await getBaseApi();
-      const query = encodeURIComponent(args.join(" "));
 
-      const response = await axios.get(`${BASE}/mahabub/ytsearch?q=${query}`, {
-        timeout: 30000
-      });
+      const response = await axios.get(
+        `${BASE}/mahabub/ytsearch`,
+        {
+          params: {
+            q: args.join(" ")
+          },
+          timeout: 30000
+        }
+      );
+
       const data = response.data;
-      console.log("[SING] Search response:", JSON.stringify(data)?.slice(0, 1500));
 
-      const pick = (d) =>
+      console.log(
+        "[SING] Search response:",
+        JSON.stringify(data).slice(0, 1000)
+      );
+
+      const pick = (value) =>
         [
-          d?.videos,
-          d?.data?.videos,
-          d?.results,
-          d?.data?.results,
-          d?.data,
-          d?.result,
-          d?.data?.data,
-          d?.items,
-          Array.isArray(d) ? d : null
-        ].find((x) => Array.isArray(x) && x.length > 0);
+          value?.videos,
+          value?.data?.videos,
+          value?.results,
+          value?.data?.results,
+          value?.data,
+          value?.result,
+          value?.data?.data,
+          value?.items,
+          Array.isArray(value) ? value : null
+        ].find(
+          (item) =>
+            Array.isArray(item) && item.length > 0
+        );
 
       const rawList = pick(data);
 
       if (!rawList) {
-        api.setMessageReaction("❌", event.messageID, () => {}, true);
+        api.setMessageReaction(
+          "❌",
+          event.messageID,
+          () => {},
+          true
+        );
+
         return api.sendMessage(
-          "🚫 **No results found!**\nTry another keyword 🎧",
-          event.threadID
+          "🚫 No songs found!\nTry another keyword 🎧",
+          event.threadID,
+          event.messageID
         );
       }
 
-      const results = rawList.slice(0, 10).map((it) => {
-        const url = it.url || it.link || "";
-        const idFromUrl = (url.match(/[?&]v=([\w-]{11})/) ||
+      const results = rawList.slice(0, 10).map((item) => {
+        const url = item.url || item.link || "";
+
+        const match =
+          url.match(/[?&]v=([\w-]{11})/) ||
           url.match(/youtu\.be\/([\w-]{11})/) ||
-          [])[1];
+          url.match(/youtube\.com\/shorts\/([\w-]{11})/);
+
         return {
-          ...it,
-          videoId: it.videoId || it.video_id || it.id || idFromUrl,
-          title: it.title || it.name || "Unknown",
-          thumbnail: it.thumbnail || it.thumb || it.image
+          ...item,
+          videoId:
+            item.videoId ||
+            item.video_id ||
+            (typeof item.id === "string"
+              ? item.id
+              : item.id?.videoId) ||
+            match?.[1],
+          title: item.title || item.name || "Unknown Song",
+          author:
+            item.author ||
+            item.channel?.name ||
+            item.channel ||
+            "",
+          thumbnail:
+            item.thumbnail ||
+            item.thumbnails?.high?.url ||
+            item.thumbnails?.medium?.url ||
+            item.thumbnails?.default?.url ||
+            item.thumb ||
+            item.image
         };
       });
 
       let body =
-        "🎧✨ **SONG SEARCH RESULTS** ✨🎧\n" +
+        "🎧✨ SONG SEARCH RESULTS ✨🎧\n" +
         "━━━━━━━━━━━━━━━━━━━\n" +
-        `🔎 **Query:** ${data.query || args.join(" ")}\n\n`;
+        `🔎 Query: ${data.query || args.join(" ")}\n\n`;
 
-      results.forEach((item, i) => {
-        const meta = [item.duration && `⏱ ${item.duration}`, item.author]
+      results.forEach((item, index) => {
+        const meta = [
+          item.duration,
+          item.author
+        ]
           .filter(Boolean)
           .join(" • ");
-        body += `🎵 **${i + 1}.** ${item.title}\n`;
-        if (meta) body += `     ${meta}\n`;
+
+        body += `🎵 ${index + 1}. ${item.title}\n`;
+
+        if (meta) {
+          body += `   ${meta}\n`;
+        }
+
+        body += "\n";
       });
 
+      body +=
+        "━━━━━━━━━━━━━━━━━━━\n" +
+        `📝 Reply with a number (1-${results.length})\n` +
+        "⬇️ To download MP3 audio";
+
+      const attachments = [];
+
+      // Download only valid thumbnails.
+      // A single failed thumbnail will not stop the search.
       const thumbs = await Promise.all(
         results.map(async (item) => {
-          const thumbnail =
-            item?.thumbnails?.high ||
-            item?.thumbnails?.medium ||
-            item?.thumbnails?.default ||
-            item?.thumbnail;
-          if (!thumbnail) return null;
+          if (!item.thumbnail) return null;
+
           try {
-            const image = await axios.get(thumbnail, {
-              responseType: "stream",
-              timeout: 15000
+            const image = await axios.get(item.thumbnail, {
+              responseType: "arraybuffer",
+              timeout: 12000,
+              maxContentLength: 3 * 1024 * 1024
             });
-            return image.data;
-          } catch (err) {
+
+            const contentType = String(
+              image.headers["content-type"] || ""
+            ).toLowerCase();
+
+            if (!contentType.startsWith("image/")) {
+              return null;
+            }
+
+            return Buffer.from(image.data);
+          } catch {
             return null;
           }
         })
       );
-      const attachments = thumbs.filter(Boolean);
 
-      body +=
-        "\n━━━━━━━━━━━━━━━━━━━\n" +
-        `📝 **Reply with a number (1-${results.length})**\n` +
-        "⬇️ To download audio 🎶";
+      attachments.push(...thumbs.filter(Boolean));
+
+      const message = {
+        body
+      };
+
+      if (attachments.length) {
+        message.attachment = attachments;
+      }
 
       api.sendMessage(
-        {
-          body,
-          attachment: attachments.length > 0 ? attachments : undefined
-        },
+        message,
         event.threadID,
-        (err, info) => {
-          if (err) {
-            console.error("Search message error:", err);
+        (error, info) => {
+          if (error) {
+            console.error(
+              "[SING] Search message error:",
+              error
+            );
             return;
           }
+
           if (!info?.messageID) return;
 
           global.GoatBot.onReply.set(info.messageID, {
@@ -207,26 +368,63 @@ module.exports = {
         event.messageID
       );
 
-      api.setMessageReaction("🎶", event.messageID, () => {}, true);
-    } catch (err) {
-      console.error("SONG SEARCH ERROR:", err?.response?.status, err?.message);
-      api.setMessageReaction("❌", event.messageID, () => {}, true);
-      api.sendMessage("❌ **Search failed!**\nTry again later.", event.threadID);
+      api.setMessageReaction(
+        "🎶",
+        event.messageID,
+        () => {},
+        true
+      );
+    } catch (error) {
+      console.error(
+        "[SING] SEARCH ERROR:",
+        error.response?.status || "",
+        error.message
+      );
+
+      api.setMessageReaction(
+        "❌",
+        event.messageID,
+        () => {},
+        true
+      );
+
+      api.sendMessage(
+        "❌ Song search failed!\nPlease try again later.",
+        event.threadID,
+        event.messageID
+      );
     }
   },
 
   // ============================================================
   // REPLY HANDLER
   // ============================================================
+
   onReply: async ({ api, event, Reply }) => {
-    if (String(event.senderID) !== String(Reply.author)) return;
+    if (
+      String(event.senderID) !== String(Reply.author)
+    ) {
+      return;
+    }
 
-    const choice = parseInt(String(event.body || "").trim(), 10);
+    const choice = Number(
+      String(event.body || "").trim()
+    );
 
-    if (Number.isNaN(choice) || choice < 1 || choice > Reply.results.length) {
-      api.setMessageReaction("❌", event.messageID, () => {}, true);
+    if (
+      !Number.isInteger(choice) ||
+      choice < 1 ||
+      choice > Reply.results.length
+    ) {
+      api.setMessageReaction(
+        "❌",
+        event.messageID,
+        () => {},
+        true
+      );
+
       return api.sendMessage(
-        "⚠️ **Invalid number!**\n" + `Reply between 1-${Reply.results.length} 🔢`,
+        `⚠️ Invalid number!\nReply between 1-${Reply.results.length}.`,
         event.threadID,
         event.messageID
       );
@@ -235,149 +433,336 @@ module.exports = {
     if (Reply.searchMsgID) {
       try {
         api.unsendMessage(Reply.searchMsgID);
-      } catch (err) {
-        console.error("Unsend search message error:", err);
+      } catch (error) {
+        console.error(
+          "[SING] Unsend error:",
+          error.message
+        );
       }
     }
 
     const video = Reply.results[choice - 1];
-    const videoId = video?.videoId || video?.id;
+
+    const videoId =
+      video?.videoId ||
+      video?.video_id ||
+      (typeof video?.id === "string"
+        ? video.id
+        : video?.id?.videoId);
 
     if (!videoId) {
-      api.setMessageReaction("❌", event.messageID, () => {}, true);
-      return api.sendMessage("❌ **Video ID not found!**", event.threadID);
+      api.setMessageReaction(
+        "❌",
+        event.messageID,
+        () => {},
+        true
+      );
+
+      return api.sendMessage(
+        "❌ Video ID not found!",
+        event.threadID,
+        event.messageID
+      );
     }
 
-    const youtubeUrl = `https://youtube.com/watch?v=${videoId}`;
-    api.setMessageReaction("⏳", event.messageID, () => {}, true);
+    const youtubeUrl =
+      `https://www.youtube.com/watch?v=${videoId}`;
+
+    api.setMessageReaction(
+      "⏳",
+      event.messageID,
+      () => {},
+      true
+    );
 
     let filePath = null;
+
     const cleanup = () => {
-      if (filePath && fs.existsSync(filePath)) fs.unlink(filePath, () => {});
+      if (filePath) {
+        const target = filePath;
+        filePath = null;
+
+        fs.unlink(target, (error) => {
+          if (error && error.code !== "ENOENT") {
+            console.error(
+              "[SING] File cleanup error:",
+              error.message
+            );
+          }
+        });
+      }
     };
 
-    // Reject JSON/HTML error bodies saved as media
-    const looksLikeError = (file) => {
-      const size = fs.statSync(file).size;
-      if (size > 50 * 1024) return false;
-      const head = fs.readFileSync(file, { encoding: "utf8" }).slice(0, 200).trim();
-      return /^[{<]/.test(head) || /error|expired|forbidden/i.test(head);
-    };
-
-    const downloadFile = async (url, ext, safeId) => {
-      const r = await axios.get(url, {
+    const downloadFile = async (url, safeId) => {
+      const response = await axios.get(url, {
         responseType: "stream",
         timeout: 180000,
         maxRedirects: 5,
         headers: DL_HEADERS,
-        validateStatus: (s) => s >= 200 && s < 300
+        validateStatus: (status) =>
+          status >= 200 && status < 300
       });
 
-      const ctype = String(r.headers["content-type"] || "").toLowerCase();
-      if (/text\/html|application\/json/.test(ctype)) {
-        r.data.destroy();
-        throw new Error(`Bad content-type: ${ctype}`);
+      const contentType = String(
+        response.headers["content-type"] || ""
+      ).toLowerCase();
+
+      if (
+        /text\/html|application\/json|text\/plain/.test(
+          contentType
+        )
+      ) {
+        response.data.destroy();
+
+        throw new Error(
+          `Invalid audio content-type: ${contentType}`
+        );
       }
 
-      const len = Number(r.headers["content-length"] || 0);
-      if (len > MAX_SIZE) {
-        r.data.destroy();
-        const e = new Error("File too large");
-        e.code = "TOO_BIG";
-        throw e;
+      const contentLength = Number(
+        response.headers["content-length"] || 0
+      );
+
+      if (contentLength > MAX_SIZE) {
+        response.data.destroy();
+
+        const error = new Error("File exceeds 25 MB");
+        error.code = "TOO_BIG";
+
+        throw error;
       }
 
-      filePath = path.join(cacheDir, `${safeId}_${Date.now()}.${ext}`);
-      await pipeline(r.data, fs.createWriteStream(filePath));
+      filePath = path.join(
+        cacheDir,
+        `${safeId}_${Date.now()}.mp3`
+      );
 
-      const size = fs.statSync(filePath).size;
-      if (size <= 0) throw new Error("File is empty");
-      if (size > MAX_SIZE) {
-        const e = new Error("File too large");
-        e.code = "TOO_BIG";
-        throw e;
+      try {
+        await pipeline(
+          response.data,
+          fs.createWriteStream(filePath)
+        );
+
+        const stats = fs.statSync(filePath);
+
+        if (stats.size <= 0) {
+          throw new Error("Downloaded file is empty");
+        }
+
+        if (stats.size > MAX_SIZE) {
+          const error = new Error("File exceeds 25 MB");
+          error.code = "TOO_BIG";
+
+          throw error;
+        }
+
+        // Detect common JSON/HTML error responses.
+        const fd = fs.openSync(filePath, "r");
+        const buffer = Buffer.alloc(256);
+
+        let bytesRead;
+
+        try {
+          bytesRead = fs.readSync(
+            fd,
+            buffer,
+            0,
+            buffer.length,
+            0
+          );
+        } finally {
+          fs.closeSync(fd);
+        }
+
+        const head = buffer
+          .subarray(0, bytesRead)
+          .toString("utf8")
+          .trim()
+          .toLowerCase();
+
+        if (
+          head.startsWith("<!doctype html") ||
+          head.startsWith("<html") ||
+          head.startsWith("{") ||
+          head.startsWith("<")
+        ) {
+          throw new Error(
+            "Server returned an error page instead of audio"
+          );
+        }
+
+        return stats.size;
+      } catch (error) {
+        cleanup();
+        throw error;
       }
-      if (looksLikeError(filePath)) throw new Error("Server returned an error body");
-      return size;
     };
 
     try {
       const BASE = await getBaseApi();
-      const safeId = String(videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
-      const title = video?.title || "Unknown Song";
-      const channel = video?.author || "";
 
-      let size = 0;
-      let lastErr = null;
+      const safeId = String(videoId).replace(
+        /[^a-zA-Z0-9_-]/g,
+        "_"
+      );
 
-      // Each attempt fetches a fresh tokenized link (links can expire)
-      // Get the link once; the file may still be converting, so retry the SAME link
-      // with longer waits. Only request a fresh link after several failures.
-      let mp3Urls = await fetchMp3Link(BASE, youtubeUrl);
-      console.log("[SING] mp3 link hosts:", mp3Urls.map((u) => new URL(u).host).join(", "));
+      let lastError = null;
+      let downloadedSize = 0;
+      let apiInfo = null;
 
-      outer: for (let attempt = 1; attempt <= 4; attempt++) {
-        for (const mp3Url of mp3Urls) {
-          try {
-            size = await downloadFile(mp3Url, "mp3", safeId);
-            lastErr = null;
-            break outer;
-          } catch (e) {
-            lastErr = e;
-            console.error(
-              `[SING] attempt ${attempt} (${new URL(mp3Url).host}) failed:`,
-              e?.response?.status || e?.code || "",
-              e?.message,
-              errBody(e)
-            );
-            cleanup();
-            filePath = null;
-            if (e.code === "TOO_BIG") break outer;
+      // Retry download and refresh the API link when necessary.
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        try {
+          const result = await fetchMp3Link(
+            BASE,
+            youtubeUrl
+          );
+
+          apiInfo = result.info;
+
+          console.log(
+            "[SING] Download URL hosts:",
+            result.urls
+              .map((url) => {
+                try {
+                  return new URL(url).host;
+                } catch {
+                  return "unknown";
+                }
+              })
+              .join(", ")
+          );
+
+          for (const downloadUrl of result.urls) {
+            try {
+              downloadedSize = await downloadFile(
+                downloadUrl,
+                safeId
+              );
+
+              lastError = null;
+              break;
+            } catch (error) {
+              lastError = error;
+
+              console.error(
+                "[SING] Download attempt failed:",
+                error.response?.status ||
+                  error.code ||
+                  "",
+                error.message,
+                getErrorBody(error)
+              );
+
+              cleanup();
+
+              if (error.code === "TOO_BIG") {
+                throw error;
+              }
+            }
           }
+
+          if (!lastError && filePath) {
+            break;
+          }
+        } catch (error) {
+          lastError = error;
+
+          if (error.code === "TOO_BIG") {
+            throw error;
+          }
+
+          console.error(
+            `[SING] Attempt ${attempt} failed:`,
+            error.message
+          );
         }
-        if (attempt === 2) {
-          try { mp3Urls = await fetchMp3Link(BASE, youtubeUrl); } catch (_) {}
+
+        if (attempt < 4) {
+          await sleep(attempt * 3000);
         }
-        if (attempt < 4) await sleep(4000);
       }
 
-      if (lastErr || !filePath) throw lastErr || new Error("No file downloaded");
+      if (!filePath || lastError) {
+        throw lastError || new Error("Audio download failed");
+      }
 
+      const title =
+        apiInfo?.title ||
+        video.title ||
+        "Unknown Song";
+
+      const author =
+        apiInfo?.author ||
+        video.author ||
+        "";
+
+      const bitrate = apiInfo?.bitrate || "";
+
+      const messageBody =
+        "🎶 NOW PLAYING 🎶\n" +
+        "━━━━━━━━━━━━━━━━━━━\n" +
+        `🎵 Title: ${title}\n` +
+        (author ? `📺 Artist/Channel: ${author}\n` : "") +
+        (bitrate ? `🔊 Quality: ${bitrate}\n` : "") +
+        `📦 Size: ${(downloadedSize / 1024 / 1024).toFixed(2)} MB\n` +
+        "━━━━━━━━━━━━━━━━━━━\n" +
+        "💿 MAHABUB-BOT ✨";
+
+      const audioPath = filePath;
+
+      // Clear the global path only after the send callback
+      // has been invoked, so cleanup can run afterwards.
       api.sendMessage(
         {
-          body:
-            "🎶 **NOW PLAYING** 🎶\n" +
-            "━━━━━━━━━━━━━━━━━━━\n" +
-            `🎵 **Title:** ${title}\n` +
-            (channel ? `📺 **Channel:** ${channel}\n` : "") +
-            `📦 **Size:** ${(size / 1024 / 1024).toFixed(2)} MB\n` +
-            "━━━━━━━━━━━━━━━━━━━\n" +
-            "💿 **MAHABUB-BOT** ✨",
-          attachment: fs.createReadStream(filePath)
+          body: messageBody,
+          attachment: fs.createReadStream(audioPath)
         },
         event.threadID,
-        (err) => {
-          if (err) console.error("[SING] Send audio error:", err);
+        (error) => {
+          if (error) {
+            console.error(
+              "[SING] Send audio error:",
+              error
+            );
+          }
+
           cleanup();
         },
         event.messageID
       );
 
-      api.setMessageReaction("🎵", event.messageID, () => {}, true);
-    } catch (err) {
+      api.setMessageReaction(
+        "🎵",
+        event.messageID,
+        () => {},
+        true
+      );
+    } catch (error) {
       console.error(
         "[SING] DOWNLOAD ERROR:",
-        err?.response?.status || err?.code || "",
-        err?.message,
-        errBody(err)
+        error.response?.status ||
+          error.code ||
+          "",
+        error.message,
+        getErrorBody(error)
       );
+
       cleanup();
-      api.setMessageReaction("❌", event.messageID, () => {}, true);
+
+      api.setMessageReaction(
+        "❌",
+        event.messageID,
+        () => {},
+        true
+      );
+
       api.sendMessage(
-        err?.code === "TOO_BIG"
-          ? "❌ **File too large to send!** (max 25 MB)"
-          : "❌ **Audio download error!**\nPlease try again later.",
-        event.threadID
+        error.code === "TOO_BIG"
+          ? "❌ Audio file is too large! Maximum size: 25 MB."
+          : "❌ Audio download failed!\nPlease try again later.",
+        event.threadID,
+        event.messageID
       );
     }
   }
