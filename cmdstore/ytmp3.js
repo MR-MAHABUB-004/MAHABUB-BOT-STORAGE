@@ -1,221 +1,368 @@
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const { pipeline } = require("stream/promises");
 
-const API_JSON =
+const API_CONFIG_URL =
   "https://raw.githubusercontent.com/MR-MAHABUB-004/MAHABUB-BOT-STORAGE/refs/heads/main/APIURL.json";
 
-const CACHE_DIR = path.join(__dirname, "cache");
-const MAX_SIZE = 25 * 1024 * 1024;
-
-if (!fs.existsSync(CACHE_DIR)) {
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
-}
+const TMP_DIR = path.join(os.tmpdir(), "mahabub-bot-ytmp3");
 
 module.exports = {
   config: {
     name: "ytmp3",
     aliases: ["ytaudio", "mp3"],
-    version: "1.0.0",
+    version: "2.0.0",
     author: "MAHABUB",
     countDown: 10,
     role: 0,
+    description: {
+      en: "Download YouTube audio as MP3"
+    },
     category: "media",
-    description: "Download YouTube audio as MP3",
     guide: {
       en: "{pn} <YouTube URL>"
     }
   },
 
-  onStart: async ({ api, event, args }) => {
-    const youtubeUrl = args[0];
-
-    if (
-      !youtubeUrl ||
-      !/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(
-        youtubeUrl
-      )
-    ) {
-      return api.sendMessage(
-        "❌ Please provide a valid YouTube URL.\n\n" +
-          "Example:\n" +
-          "ytmp3 https://www.youtube.com/watch?v=5PckoKSTlbU",
-        event.threadID,
-        event.messageID
-      );
-    }
+  onStart: async function ({ api, event, args }) {
+    const { threadID, messageID } = event;
 
     let filePath = null;
+    let statusMessageID = null;
 
-    const cleanup = () => {
-      if (filePath) {
-        const target = filePath;
-        filePath = null;
-        fs.unlink(target, () => {});
+    const sendStatus = (message) =>
+      new Promise((resolve) => {
+        api.sendMessage(message, threadID, (err, info) => {
+          if (!err && info) statusMessageID = info.messageID;
+          resolve(info);
+        });
+      });
+
+    const removeFile = () => {
+      if (filePath && fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch (err) {
+          console.error("[YTMP3] File cleanup error:", err.message);
+        }
+      }
+    };
+
+    const removeStatus = () => {
+      if (statusMessageID) {
+        api.unsendMessage(statusMessageID, () => {});
       }
     };
 
     try {
-      api.setMessageReaction(
-        "⏳",
-        event.messageID,
-        () => {},
-        true
-      );
+      const youtubeUrl = args.join(" ").trim();
 
-      // Get API base URL
-      const configResponse = await axios.get(API_JSON, {
-        timeout: 15000
+      if (!youtubeUrl) {
+        return api.sendMessage(
+          "❌ Please provide a YouTube URL.\n\nExample:\nytmp3 https://www.youtube.com/watch?v=VIDEO_ID",
+          threadID,
+          messageID
+        );
+      }
+
+      let parsedUrl;
+
+      try {
+        parsedUrl = new URL(youtubeUrl);
+      } catch {
+        return api.sendMessage(
+          "❌ Invalid URL. Please provide a valid YouTube link.",
+          threadID,
+          messageID
+        );
+      }
+
+      const hostname = parsedUrl.hostname.toLowerCase();
+
+      const validHosts = [
+        "youtube.com",
+        "www.youtube.com",
+        "m.youtube.com",
+        "music.youtube.com",
+        "youtu.be",
+        "www.youtu.be"
+      ];
+
+      if (!validHosts.includes(hostname)) {
+        return api.sendMessage(
+          "❌ Only YouTube URLs are supported.",
+          threadID,
+          messageID
+        );
+      }
+
+      await sendStatus("⏳ Downloading YouTube audio...\nPlease wait.");
+
+      // 1. Read API configuration
+      console.log("[YTMP3] Reading API configuration...");
+
+      const configResponse = await axios.get(API_CONFIG_URL, {
+        timeout: 15000,
+        headers: {
+          "User-Agent": "Mozilla/5.0 MAHABUB-BOT"
+        }
       });
 
-      const BASE = String(
-        configResponse.data?.api || ""
-      ).replace(/\/+$/, "");
-
-      if (!BASE) {
-        throw new Error("API URL not found in APIURL.json");
-      }
-
-      // Request MP3 download information
-      const response = await axios.get(
-        `${BASE}/mahabub/ytmp3v3`,
-        {
-          params: { url: youtubeUrl },
-          timeout: 120000
-        }
-      );
-
-      const data = response.data;
+      const BASE_URL = configResponse.data?.api;
 
       if (
-        data?.status !== "success" ||
-        typeof data?.download_url !== "string" ||
-        !/^https?:\/\//i.test(data.download_url)
+        typeof BASE_URL !== "string" ||
+        !BASE_URL.trim()
       ) {
-        throw new Error(
-          data?.message || "MP3 download URL not found"
-        );
+        throw new Error("APIURL.json does not contain a valid 'api' URL.");
       }
 
-      const title = data.title || "YouTube Audio";
-      const author = data.author || "Unknown";
-      const bitrate = data.bitrate || "Unknown";
+      const baseURL = BASE_URL.trim().replace(/\/+$/, "");
 
-      // Download actual audio file
-      const audioResponse = await axios.get(
-        data.download_url,
+      console.log("[YTMP3] API base:", baseURL);
+
+      // 2. Request MP3 conversion
+      console.log("[YTMP3] Requesting audio conversion...");
+
+      const apiResponse = await axios.get(
+        `${baseURL}/mahabub/ytmp3v3`,
         {
-          responseType: "stream",
-          timeout: 180000,
-          maxRedirects: 5,
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36"
+          params: {
+            url: youtubeUrl
           },
-          validateStatus: (status) =>
-            status >= 200 && status < 300
+          timeout: 60000,
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "Mozilla/5.0 MAHABUB-BOT"
+          }
         }
       );
 
-      const contentType = String(
-        audioResponse.headers["content-type"] || ""
-      ).toLowerCase();
+      const data = apiResponse.data;
 
-      if (
-        /text\/html|application\/json/.test(contentType)
-      ) {
-        audioResponse.data.destroy();
+      if (!data || typeof data !== "object") {
+        throw new Error("The API returned an invalid response.");
+      }
+
+      if (data.status !== "success") {
+        console.error("[YTMP3] API returned an error:", data);
+
         throw new Error(
-          "Download URL returned an error page instead of audio"
+          data.message ||
+          data.error ||
+          "The YouTube audio API failed."
         );
       }
 
-      const contentLength = Number(
-        audioResponse.headers["content-length"] || 0
-      );
+      const downloadURL = data.download_url;
 
-      if (contentLength > MAX_SIZE) {
-        audioResponse.data.destroy();
-        throw new Error("TOO_BIG");
+      if (
+        typeof downloadURL !== "string" ||
+        !/^https?:\/\//i.test(downloadURL)
+      ) {
+        console.error("[YTMP3] Missing download_url:", data);
+
+        throw new Error(
+          "The API did not return a valid download_url."
+        );
       }
 
-      const safeName = String(data.videoId || Date.now())
-        .replace(/[^a-zA-Z0-9_-]/g, "_");
+      const title = String(data.title || "YouTube Audio")
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, "")
+        .trim()
+        .slice(0, 100) || "YouTube Audio";
+
+      const videoId = String(data.videoId || Date.now())
+        .replace(/[^a-zA-Z0-9_-]/g, "");
+
+      console.log("[YTMP3] Title:", title);
+      console.log("[YTMP3] Video ID:", videoId);
+      console.log("[YTMP3] Download URL received.");
+
+      // 3. Prepare temporary directory
+      fs.mkdirSync(TMP_DIR, { recursive: true });
 
       filePath = path.join(
-        CACHE_DIR,
-        `${safeName}_${Date.now()}.mp3`
+        TMP_DIR,
+        `${videoId}_${Date.now()}.mp3`
       );
 
+      // 4. Download audio
+      console.log("[YTMP3] Downloading MP3 file...");
+
+      const downloadResponse = await axios.get(downloadURL, {
+        responseType: "stream",
+        timeout: 120000,
+        maxRedirects: 5,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36",
+          Accept: "audio/mpeg, audio/*;q=0.9, */*;q=0.8"
+        },
+        validateStatus: (status) => status >= 200 && status < 300
+      });
+
+      const contentType = String(
+        downloadResponse.headers["content-type"] || ""
+      ).toLowerCase();
+
+      const contentLength = Number(
+        downloadResponse.headers["content-length"] || 0
+      );
+
+      console.log("[YTMP3] Download HTTP status:", downloadResponse.status);
+      console.log("[YTMP3] Content-Type:", contentType);
+      console.log("[YTMP3] Content-Length:", contentLength || "unknown");
+
+      if (
+        contentType.includes("text/html") ||
+        contentType.includes("application/json")
+      ) {
+        downloadResponse.data.destroy();
+
+        throw new Error(
+          `The download server returned ${contentType}, not an audio file. The link may have expired or been blocked.`
+        );
+      }
+
+      // Messenger attachment limits can vary by platform.
+      // Stop early when the server declares a clearly excessive file size.
+      const MAX_SIZE = 25 * 1024 * 1024;
+
+      if (contentLength > MAX_SIZE) {
+        downloadResponse.data.destroy();
+
+        throw new Error(
+          `Audio file is too large (${(contentLength / 1024 / 1024).toFixed(2)} MB).`
+        );
+      }
+
+      let downloadedBytes = 0;
+
+      downloadResponse.data.on("data", (chunk) => {
+        downloadedBytes += chunk.length;
+
+        if (downloadedBytes > MAX_SIZE) {
+          downloadResponse.data.destroy(
+            new Error("Audio file exceeds the 25 MB size limit.")
+          );
+        }
+      });
+
       await pipeline(
-        audioResponse.data,
+        downloadResponse.data,
         fs.createWriteStream(filePath)
       );
 
-      const stats = fs.statSync(filePath);
-
-      if (stats.size === 0) {
-        throw new Error("Downloaded audio is empty");
+      if (!fs.existsSync(filePath)) {
+        throw new Error("The downloaded audio file was not created.");
       }
 
-      if (stats.size > MAX_SIZE) {
-        throw new Error("TOO_BIG");
+      const actualSize = fs.statSync(filePath).size;
+
+      console.log(
+        "[YTMP3] Download completed:",
+        `${(actualSize / 1024 / 1024).toFixed(2)} MB`
+      );
+
+      if (actualSize < 1000) {
+        throw new Error(
+          "The downloaded file is too small and may not contain audio."
+        );
       }
 
-      // Send audio to Messenger
-      api.sendMessage(
-        {
-          body:
-            "🎵 𝗬𝗢𝗨𝗧𝗨𝗕𝗘 𝗔𝗨𝗗𝗜𝗢\n" +
-            "━━━━━━━━━━━━━━━━━━\n" +
-            `🎧 Title: ${title}\n` +
-            `📺 Author: ${author}\n` +
-            `🔊 Quality: ${bitrate}\n` +
-            `📦 Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB\n` +
-            "━━━━━━━━━━━━━━━━━━\n" +
-            "💚 MAHABUB-BOT",
-          attachment: fs.createReadStream(filePath)
-        },
-        event.threadID,
-        (error) => {
-          if (error) {
-            console.error("[YTMP3] Send error:", error);
-          }
+      if (actualSize > MAX_SIZE) {
+        throw new Error("Audio file exceeds the 25 MB size limit.");
+      }
 
-          cleanup();
-        },
-        event.messageID
-      );
+      // 5. Send MP3 attachment
+      console.log("[YTMP3] Sending audio attachment...");
 
-      api.setMessageReaction(
-        "✅",
-        event.messageID,
-        () => {},
-        true
-      );
+      await new Promise((resolve, reject) => {
+        api.sendMessage(
+          {
+            body:
+              `🎵 𝗬𝗢𝗨𝗧𝗨𝗕𝗘 𝗔𝗨𝗗𝗜𝗢\n\n` +
+              `📌 Title: ${title}\n` +
+              `🎧 Quality: ${data.bitrate || "MP3"}\n` +
+              `⏱️ Duration: ${
+                Number.isFinite(Number(data.duration))
+                  ? `${Math.floor(Number(data.duration) / 60)}:${String(
+                      Math.floor(Number(data.duration) % 60)
+                    ).padStart(2, "0")}`
+                  : "Unknown"
+              }\n` +
+              `📦 Size: ${(actualSize / 1024 / 1024).toFixed(2)} MB\n` +
+              `\nᴘᴏᴡᴇʀᴇᴅ ʙʏ MAHABUB-BOT`,
+            attachment: fs.createReadStream(filePath)
+          },
+          threadID,
+          (err) => {
+            if (err) {
+              return reject(err);
+            }
+
+            resolve();
+          },
+          messageID
+        );
+      });
+
+      console.log("[YTMP3] Audio sent successfully.");
+
+      removeStatus();
+      removeFile();
     } catch (error) {
-      console.error(
-        "[YTMP3] Error:",
-        error.response?.status || "",
-        error.message
-      );
+      console.error("[YTMP3] ERROR DETAILS:", {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        contentType: error.response?.headers?.["content-type"],
+        response:
+          typeof error.response?.data === "string"
+            ? error.response.data.slice(0, 500)
+            : undefined
+      });
 
-      cleanup();
+      removeFile();
+      removeStatus();
 
-      api.setMessageReaction(
-        "❌",
-        event.messageID,
-        () => {},
-        true
-      );
+      let reason = error.message || "Unknown error";
+
+      if (
+        error.code === "ECONNABORTED" ||
+        error.code === "ETIMEDOUT"
+      ) {
+        reason = "Request timed out. Please try again.";
+      } else if (error.response?.status === 403) {
+        reason =
+          "The download server denied access (403). The API download link may be restricted or expired.";
+      } else if (error.response?.status === 404) {
+        reason =
+          "The API endpoint or download file was not found (404).";
+      } else if (error.response?.status === 429) {
+        reason =
+          "Too many requests. Please wait a little and try again.";
+      } else if (
+        error.code === "ENOTFOUND" ||
+        error.code === "EAI_AGAIN"
+      ) {
+        reason =
+          "Could not connect to the server. Check the API domain or internet connection.";
+      } else if (
+        error.message?.includes("25 MB")
+      ) {
+        reason = error.message;
+      }
 
       api.sendMessage(
-        error.message === "TOO_BIG"
-          ? "❌ Audio file is too large! Maximum size: 25 MB."
-          : "❌ Audio download failed. Please try again later.",
-        event.threadID,
-        event.messageID
+        `❌ 𝗬𝗧𝗠𝗣𝟯 𝗙𝗔𝗜𝗟𝗘𝗗\n\n` +
+          `Reason: ${reason}\n\n` +
+          `Please try again later.`,
+        threadID,
+        messageID
       );
     }
   }
