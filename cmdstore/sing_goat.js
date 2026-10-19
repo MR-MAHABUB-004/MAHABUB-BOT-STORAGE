@@ -27,7 +27,7 @@ async function getApiConfig() {
   return API_CACHE;
 }
 
-// Audio download API: cfg.ytmp3  (called as BASE/?url=<youtube url>)
+// Audio download API: cfg.ytmp3 -> BASE/ytmp3v4?url=<youtube url>
 async function getBaseApi() {
   const cfg = await getApiConfig();
   if (!cfg.ytmp3) throw new Error("ytmp3 API URL not found");
@@ -54,10 +54,10 @@ const errBody = (err) => {
   }
 };
 
-// NEW: call ytmp3v4 API with retry -> returns the full response object
+// Call ytmp3v4 API with retry -> returns the full response object
 // Response: { status, title, author, videoId, filesize, download_url, expires_in, ... }
 async function fetchMp3Link(MP3_API, youtubeUrl) {
-  const apiUrl = `${MP3_API}/?url=${encodeURIComponent(youtubeUrl)}`;
+  const apiUrl = `${MP3_API}/ytmp3v4?url=${encodeURIComponent(youtubeUrl)}`;
   let lastErr = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -83,7 +83,7 @@ async function fetchMp3Link(MP3_API, youtubeUrl) {
 module.exports = {
   config: {
     name: "sing",
-    version: "5.4",
+    version: "5.5",
     author: "@𝐌𝐑᭄﹅ 𝐌𝐀𝐇𝐀𝐁𝐔𝐁﹅ メꪜ",
     countDown: 5,
     role: 0,
@@ -313,10 +313,10 @@ module.exports = {
     };
 
     try {
-      const MP3_API = await getBaseApi(); // cfg.ytmp3 (download API)
+      const MP3_API = await getBaseApi(); // download API base (with fallback)
       const safeId = String(videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
 
-      // The new API stores the file on its own server and returns a ready link
+      // The API stores the file on its own server and returns a ready link
       // (valid ~5 minutes), so we download it right away.
       let info = await fetchMp3Link(MP3_API, youtubeUrl);
       const title = info.title || video?.title || "Unknown Song";
