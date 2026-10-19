@@ -18,5 +18,5 @@
   "album":     "http://72.62.241.211:6788",
   "ayesha":    "https://ytmp-3-v3.vercel.app",
   "ytdlapi":   "http://76.13.195.32:9188/api/vercel?",
-  "ytmp3v4":     "http://76.13.195.32:9188" 
+  "ytmp3":     "http://76.13.195.32:9188" 
 }
