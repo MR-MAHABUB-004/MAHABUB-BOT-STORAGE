@@ -27,19 +27,18 @@ async function getApiConfig() {
   return API_CACHE;
 }
 
-// Base API (used for search): cfg.ytmp3
+// Audio download API: cfg.ytmp3  (called as BASE/?url=<youtube url>)
 async function getBaseApi() {
   const cfg = await getApiConfig();
-  if (!cfg.ytmp3) throw new Error("API URL not found");
+  if (!cfg.ytmp3) throw new Error("ytmp3 API URL not found");
   return String(cfg.ytmp3).replace(/\/+$/, "");
 }
 
-// NEW: ytmp3v4 API (used for audio download): cfg.ytmp3v4
-// Example value in APIURL.json: "ytmp3v4": "http://76.13.195.32:9188"
-async function getMp3Api() {
+// Search API: cfg.api  (called as BASE/mahabub/ytsearch?q=<query>)
+async function getSearchApi() {
   const cfg = await getApiConfig();
-  if (!cfg.ytmp3v4) throw new Error("ytmp3v4 API URL not found");
-  return String(cfg.ytmp3v4).replace(/\/+$/, "");
+  if (!cfg.api) throw new Error("search API URL not found");
+  return String(cfg.api).replace(/\/+$/, "");
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -112,7 +111,7 @@ module.exports = {
     api.setMessageReaction("⏳", event.messageID, () => {}, true);
 
     try {
-      const BASE = await getBaseApi();
+      const BASE = await getSearchApi();
       const query = encodeURIComponent(args.join(" "));
 
       const response = await axios.get(`${BASE}/mahabub/ytsearch?q=${query}`, {
@@ -314,7 +313,7 @@ module.exports = {
     };
 
     try {
-      const MP3_API = await getMp3Api();
+      const MP3_API = await getBaseApi(); // cfg.ytmp3 (download API)
       const safeId = String(videoId).replace(/[^a-zA-Z0-9_-]/g, "_");
 
       // The new API stores the file on its own server and returns a ready link
