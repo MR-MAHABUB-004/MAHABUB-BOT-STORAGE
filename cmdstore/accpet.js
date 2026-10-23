@@ -3,6 +3,44 @@ const moment = require("moment-timezone");
 const GRAPHQL_URL = "https://www.facebook.com/api/graphql/";
 const REPLY_TIMEOUT = 60; // seconds the list stays active (was 8s, far too short)
 
+
+// Walks an object and returns the first non-empty edges[] whose nodes have id + name
+function findPeopleEdges(obj, depth = 0) {
+  if (!obj || typeof obj !== "object" || depth > 6) return null;
+  if (Array.isArray(obj.edges) && obj.edges.length && obj.edges[0].node && obj.edges[0].node.id && obj.edges[0].node.name)
+    return obj.edges;
+  for (const k of Object.keys(obj)) {
+    const r = findPeopleEdges(obj[k], depth + 1);
+    if (r) return r;
+  }
+  return null;
+}
+
+function buildMutationForm(api, action, userID) {
+  const form = {
+    av: api.getCurrentUserID(),
+    fb_api_caller_class: "RelayModern",
+    variables: JSON.stringify({
+      input: {
+        source: "friends_tab",
+        actor_id: api.getCurrentUserID(),
+        client_mutation_id: String(Math.round(Math.random() * 19)),
+        friend_requester_id: String(userID),
+      },
+      scale: 3,
+      refresh_num: 0,
+    }),
+  };
+  if (action === "add") {
+    form.fb_api_req_friendly_name = "FriendingCometFriendRequestConfirmMutation";
+    form.doc_id = "3147613905362928";
+  } else {
+    form.fb_api_req_friendly_name = "FriendingCometFriendRequestDeleteMutation";
+    form.doc_id = "4108254489275063";
+  }
+  return form;
+}
+
 function parseResponse(raw) {
   if (typeof raw === "string") return JSON.parse(raw);
   return raw;
@@ -111,7 +149,40 @@ module.exports = {
     return api.sendMessage(msg || "Nothing was processed.", event.threadID, event.messageID);
   },
 
-  onStart: async function ({ event, api, commandName }) {
+  onStart: async function ({ event, api, commandName, args }) {
+    // Direct mode (works even if the request list cannot be loaded):
+    //   !accept <userID>        -> accept
+    //   !accept add <userID>    -> accept
+    //   !accept del <userID>    -> delete request
+    if (args && args.length) {
+      let action = "add";
+      let ids = args;
+      if (args[0] === "add" || args[0] === "del") {
+        action = args[0];
+        ids = args.slice(1);
+      }
+      ids = ids.filter((x) => /^\d{5,}$/.test(x));
+      if (ids.length) {
+        const ok = [], bad = [];
+        for (const id of ids) {
+          try {
+            const res = parseResponse(await api.httpPost(GRAPHQL_URL, buildMutationForm(api, action, id)));
+            if (res && res.errors) {
+              console.log("[accept] direct error:", JSON.stringify(res.errors).slice(0, 800));
+              bad.push(id);
+            } else ok.push(id);
+          } catch (e) {
+            console.log("[accept] direct exception:", e && e.message);
+            bad.push(id);
+          }
+        }
+        let m = "";
+        if (ok.length) m += `» ${action === "add" ? "Accepted" : "Deleted"}: ${ok.join(", ")}`;
+        if (bad.length) m += `${m ? "\n" : ""}» Failed: ${bad.join(", ")} (check pm2 logs B)`;
+        return api.sendMessage(m, event.threadID, event.messageID);
+      }
+    }
+
     const form = {
       av: api.getCurrentUserID(),
       fb_api_req_friendly_name: "FriendingCometFriendRequestsRootQueryRelayPreloader",
@@ -121,15 +192,25 @@ module.exports = {
     };
 
     let listRequest;
+    let rawRes;
     try {
-      const res = parseResponse(await api.httpPost(GRAPHQL_URL, form));
-      listRequest = res.data.viewer.friending_possibilities.edges;
+      rawRes = parseResponse(await api.httpPost(GRAPHQL_URL, form));
+      listRequest = rawRes.data.viewer.friending_possibilities.edges;
     } catch (e) {
-      return api.sendMessage(
-        "Could not load friend requests. Facebook may have changed the API, or the session cookie is invalid.",
-        event.threadID,
-        event.messageID
-      );
+      // fallback: search the response for any edges list that looks like people
+      listRequest = rawRes && rawRes.data ? findPeopleEdges(rawRes.data) : null;
+      if (!listRequest) {
+        console.log("[accept] load failed:", e && e.message, rawRes ? JSON.stringify(rawRes).slice(0, 1500) : "");
+        return api.sendMessage(
+          "Could not load friend requests. Facebook may have changed the API, or the session cookie is invalid.\nCheck: pm2 logs B",
+          event.threadID,
+          event.messageID
+        );
+      }
+    }
+
+    if ((!listRequest || !listRequest.length) && rawRes) {
+      console.log("[accept] empty list, raw response:", JSON.stringify(rawRes).slice(0, 1500));
     }
 
     if (!listRequest || !listRequest.length)
