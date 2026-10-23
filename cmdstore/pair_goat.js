@@ -137,17 +137,18 @@ module.exports = {
         fs.writeFileSync(pathImg, canvas.toBuffer());
 
         // Send message with your kawaii styled message below
-        const kawaiiMessage = `
-🌸💞 *Cᴏɴɢʀᴀᴛs* 💞🌸  
-@${name1}  ＆ @${name2} ✨
+        // Mentions first: names must come before any emoji / special unicode,
+        // otherwise Facebook's mention offsets get shifted and the mention breaks.
+        const kawaiiMessage = `@${name1} & @${name2}
 
-💖 *Mᴀᴛᴄʜ Rᴀᴛᴇ:* ${matchRate}% 💖
+🌸💞 Cᴏɴɢʀᴀᴛs 💞🌸 ✨
 
-🌷 𝓛𝓸𝓿𝓮𝓵𝔂 𝓝𝓸𝓽𝓮 🌷  
+💖 Mᴀᴛᴄʜ Rᴀᴛᴇ: ${matchRate}% 💖
+
+🌷 𝓛𝓸𝓿𝓮𝓵𝔂 𝓝𝓸𝓽𝓮 🌷
 ❝ ${lovelyNote}❞
 
-💫 𝒀𝒐𝒖 𝒂𝒓𝒆 𝒎𝒚 𝒔𝒖𝒏𝒔𝒉𝒊𝒏𝒆! 💫
-`;
+💫 𝒀𝒐𝒖 𝒂𝒓𝒆 𝒎𝒚 𝒔𝒖𝒏𝒔𝒉𝒊𝒏𝒆! 💫`;
 
         return api.sendMessage(
             {
